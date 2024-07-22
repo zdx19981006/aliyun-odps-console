@@ -2,6 +2,7 @@
 # 0.48.0-public [2024-07-22]
 ### 新功能
 - odps-sdk 版本从 `0.47.0-public` 升级至 `0.48.6-public`, 包含的增强和修复参阅 [odps-sdk 变更日志](https://github.com/aliyun/aliyun-odps-java-sdk/blob/release/0.48.x/CHANGELOG_CN.md)
+- `desc extended` 命令增加了对数据脱敏信息的展示
 ### 修复
 - MCQA 模式能够更准确的识别 fallback 行为，避免对 logview 的重复展示 
 
