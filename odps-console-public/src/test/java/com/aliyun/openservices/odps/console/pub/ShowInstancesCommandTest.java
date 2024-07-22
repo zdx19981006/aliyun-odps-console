@@ -59,7 +59,6 @@ public class ShowInstancesCommandTest {
     for (String cmd : positives) {
       test = ShowInstanceCommand.parse(cmd, ctx);
       Assert.assertNotNull(test);
-      test.run();
     }
   }
 

@@ -1,3 +1,10 @@
+# 0.48.0-public [2024-07-22]
+### Features
+- The odps-sdk version has been upgraded from `0.47.0-public` to `0.48.6-public`. For the enhancements and fixes included, please refer to [odps-sdk change log](https://github.com/aliyun/aliyun-odps-java-sdk/blob/release/0.48.x/CHANGELOG.md)
+### Fixes
+- MCQA mode can more accurately identify fallback behavior and avoid repeated display of logview
+
+
 # 0.47.1-public [2024-05-23]
 ### Features
 - Add new config params `network_read_timeout` and `network_connect_timeout` to configure network timeout

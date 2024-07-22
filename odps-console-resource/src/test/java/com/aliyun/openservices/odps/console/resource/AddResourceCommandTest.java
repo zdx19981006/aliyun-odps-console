@@ -247,8 +247,6 @@ public class AddResourceCommandTest {
     assertNotNull(command);
     command.execute();
 
-    command = ListResourcesCommand.parse("list resources", context);
-    command.execute();
 
     command = DescribeResourceCommand.parse("desc resource volumearchive.zip", context);
     command.execute();

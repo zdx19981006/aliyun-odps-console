@@ -78,6 +78,7 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
   private static String showVarsRegex = "show\\s+variables";
   private static String fallbackMessage = "Query failed";
   private static String rerunInteractiveMode = "Will rerun in interactive mode";
+  private static String runOfflineMode = "Running in offline mode";
 
   private Lock waitLogviewLock = new ReentrantLock();
   private Condition waitLogviewCond = waitLogviewLock.newCondition();
@@ -134,7 +135,7 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
             needAppendLogview = true;
             break;
           }
-          if (log.contains(fallbackMessage)) {
+          if (log.contains(fallbackMessage) || log.contains(runOfflineMode)) {
             needAppendLogview = false;
           }
         }

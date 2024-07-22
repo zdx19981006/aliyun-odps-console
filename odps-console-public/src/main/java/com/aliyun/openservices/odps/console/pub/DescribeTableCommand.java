@@ -453,20 +453,8 @@ public class DescribeTableCommand extends AbstractCommand {
         if (isAcid2Table) {
           appendAcidInfo(t, t.getClusterInfo(), w);
         }
-        // storageTier 需要区分是分区表还是非分区表
-        if (t.isPartitioned()) { //分区表显示汇总
-          StorageTierInfo storageTierInfo = t.getStorageTierInfo();
-          if (storageTierInfo != null) {
-            for (StorageTier tier : StorageTier.values()) {
-              if (storageTierInfo.getStorageSize(tier) != null) {
-                w.printf("| %s:%s %-56d |\n", tier.getSizeName(),
-                         getSpace(24 - tier.getSizeName().length()),
-                         storageTierInfo.getStorageSize(tier));
-              }
-            }
-          }
-        } else { //非分区表只显示类型和修改时间
-          if (t.getStorageTierInfo() != null) {
+        // storageTier 仅支持非分区表
+        if (!t.isPartitioned() && (t.getStorageTierInfo() != null)) {
             if (t.getStorageTierInfo().getStorageTier() != null) {
               w.printf("| StorageTier:              %-56s |\n",
                        t.getStorageTierInfo().getStorageTier().getName());
@@ -475,7 +463,7 @@ public class DescribeTableCommand extends AbstractCommand {
             if (lastModifiedTime != null) {
               w.printf("| StorageTierLastModifiedTime:  %-52s |\n", df.format(lastModifiedTime));
             }
-          }
+
         }
 
         w.println(
@@ -510,6 +498,27 @@ public class DescribeTableCommand extends AbstractCommand {
           w.println(
               "+------------------------------------------------------------------------------------+");
         }
+      }
+
+      List<Table.ColumnMaskInfo> columnMaskInfo = t.getColumnMaskInfo();
+      if (columnMaskInfo != null) {
+        w.println("| Data Masking Policy Detail:                                                        |");
+        w.println("+------------------------------------------------------------------------------------+");
+        w.println("| Column Name               | Policy Name List                                       |");
+        w.println("+------------------------------------------------------------------------------------+");
+        for (Table.ColumnMaskInfo columnMaskInfoItem : columnMaskInfo) {
+          String name = columnMaskInfoItem.getName();
+          List<String> policyNames = columnMaskInfoItem.getPolicyNameList();
+          for (int i = 0; i < policyNames.size(); i++) {
+            if (i == 0) {
+              w.printf("| %-25s | %-54s |\n", name, policyNames.get(i));
+            } else {
+              w.printf("| %-25s | %-54s |\n", "", policyNames.get(i));
+            }
+          }
+          w.println("+------------------------------------------------------------------------------------+");
+        }
+
       }
     } catch (Exception e) {
       throw new ODPSConsoleException(ErrorCode.INVALID_RESPONSE + ": Invalid table schema.", e);
