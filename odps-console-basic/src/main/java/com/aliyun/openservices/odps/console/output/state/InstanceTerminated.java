@@ -49,13 +49,8 @@ public class InstanceTerminated extends InstanceState {
       throw e;
     }
 
-    // 若是同步 instance, 则结束状态机
-    if (context.getInstance().isSync()) {
-      return State.END;
-    }
-
-    // 若进度打印没有完成，则强行刷新进度至 100% 状态
-    if (!context.isProgressReportFinish()) {
+    // 若进度打印没有完成，则强行刷新进度至 100% 状态。同步 instance 不打印 progress 信息
+    if (!context.getInstance().isSync() && !context.isProgressReportFinish()) {
       InstanceProgressReporter reporter = new InstanceProgressReporter(context);
       reporter.printProgress(true);
     }

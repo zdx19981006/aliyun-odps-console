@@ -126,6 +126,7 @@ public class ODPSConsoleConstants {
   public static final String ODPS_RUNNING_CLUSTER = "odps.running.cluster";
   public static final String CONSOLE_SQL_RESULT_INSTANCETUNNEL = "console.sql.result.instancetunnel";
   public static final String TASK_MAJOR_VERSION = "odps.task.major.version";
+  public static final String ODPS_TASK_WLM_QUOTA = "odps.task.wlm.quota";
 
   public static final String tablePattern = "";
 

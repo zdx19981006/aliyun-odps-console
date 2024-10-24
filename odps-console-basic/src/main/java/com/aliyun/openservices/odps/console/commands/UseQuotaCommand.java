@@ -13,6 +13,7 @@ import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
+import com.aliyun.openservices.odps.console.utils.SessionUtils;
 
 public class UseQuotaCommand extends AbstractCommand {
 
@@ -47,7 +48,7 @@ public class UseQuotaCommand extends AbstractCommand {
   }
 
   @Override
-  protected void run() throws ODPSConsoleException, OdpsException {
+  public void run() throws ODPSConsoleException, OdpsException {
 
     if (this.quotaName == null || this.quotaName.isEmpty()) {
       throw new InvalidParameterException("Invalid parameter: Quota name is empty.");
@@ -73,9 +74,21 @@ public class UseQuotaCommand extends AbstractCommand {
         throw new InvalidParameterException("Level 1 quota is not allowed to use. Please use a Level 2 quota.");
       }
       if (quota.getResourceSystemType() != null
-          && quota.getResourceSystemType().equalsIgnoreCase("FUXI_ONLINE")) {
+          && "FUXI_ONLINE".equalsIgnoreCase(quota.getResourceSystemType())) {
         throw new InvalidParameterException("Online quota is not allowed to use manually. " +
                 "It can only be used automatically by entering interactive mode.");
+      }
+
+      // fuxi_vw means enable query by mcqa v2
+      if (quota.getResourceSystemType() != null
+          && "FUXI_VW".equalsIgnoreCase(quota.getResourceSystemType())) {
+        getContext().setInteractiveQuery(true);
+        SessionUtils.resetSQLExecutor(null, null, getContext(), getCurrentOdps(), false,
+                                      quota.getNickname(), true, regionId);
+      } else {
+        // mcqa v2 no need to set hints
+        String value = String.format("%s@%s", quota.getNickname(), quota.getRegionId());
+        SetCommand.setMap.put("odps.task.wlm.quota", value);
       }
     } catch (NoSuchObjectException e) {
       String errMsg = "Quota " + quotaName + " is not found in region " + regionId
@@ -91,14 +104,12 @@ public class UseQuotaCommand extends AbstractCommand {
       ee.setRequestId(e.getRequestId());
       throw ee;
     }
-
-    String value = String.format("%s@%s", quota.getNickname(), quota.getRegionId());
-    SetCommand.setMap.put("odps.task.wlm.quota", value);
     getContext().setQuotaName(quota.getNickname());
     getContext().setQuotaRegionId(quota.getRegionId());
   }
 
-  public static UseQuotaCommand parse(List<String> optionList, ExecutionContext sessionContext) {
+  public static UseQuotaCommand parse(List<String> optionList, ExecutionContext sessionContext)
+      throws ODPSConsoleException, OdpsException {
     String regionId = ODPSConsoleUtils.shiftOption(optionList, OPTION_REGION_ID);
     String quotaName = ODPSConsoleUtils.shiftOption(optionList, OPTION_QUOTA_NAME);
     if (!StringUtils.isNullOrEmpty(quotaName)) {
@@ -107,7 +118,8 @@ public class UseQuotaCommand extends AbstractCommand {
     return null;
   }
 
-  public static UseQuotaCommand parse(String commandString, ExecutionContext sessionContext) {
+  public static UseQuotaCommand parse(String commandString, ExecutionContext sessionContext)
+      throws ODPSConsoleException, OdpsException {
     Matcher matcher = PATTERN.matcher(commandString);
     if (matcher.matches()) {
       return new UseQuotaCommand(

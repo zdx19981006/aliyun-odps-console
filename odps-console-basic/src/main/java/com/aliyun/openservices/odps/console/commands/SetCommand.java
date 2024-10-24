@@ -32,6 +32,7 @@ import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstant
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_NAMESPACE_SCHEMA;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_RUNNING_CLUSTER;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_SQL_TIMEZONE;
+import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_TASK_WLM_QUOTA;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.PROJECT_PROTECTION;
 
 import java.io.PrintStream;
@@ -121,10 +122,18 @@ public class SetCommand extends AbstractCommand {
         getContext().setUserSetSqlTimezone(true);
       }
 
-      if (ENABLE_INTERACTIVE_MODE.equals(key)) {
+      if (ENABLE_INTERACTIVE_MODE.equalsIgnoreCase(key)) {
         // change interactive mode temporarily
         getContext().setInteractiveQuery(Boolean.parseBoolean(value));
         getWriter().writeError("OK");
+        return;
+      }
+
+      if (ODPS_TASK_WLM_QUOTA.equalsIgnoreCase(key)) {
+        UseQuotaCommand useQuotaCommand =
+            new UseQuotaCommand(getCommandText(), getContext(), getContext().getQuotaRegionId(),
+                                value);
+        useQuotaCommand.run();
         return;
       }
 

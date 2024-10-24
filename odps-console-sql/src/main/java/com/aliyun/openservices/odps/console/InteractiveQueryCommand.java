@@ -310,8 +310,8 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
 
       waitLogviewGenerated();
       finishReporter(reporterThread);
-      String postMessage = "Session sub-query" + " cost time: "
-                           + String.valueOf(System.currentTimeMillis() - startTime) + " ms.";
+      String postMessage = "Query cost time: "
+                           + (System.currentTimeMillis() - startTime) + " ms.";
 
       // print summary in compatible output mode
       if (this.getContext().isInteractiveOutputCompatible()) {

@@ -182,6 +182,12 @@ public class QueryCommand extends MultiClusterCommandBase {
   public void run() throws OdpsException, ODPSConsoleException {
     ExecutionContext context = getContext();
 
+    if (context.isInteractiveQuery()) {
+      getWriter().writeError("Query will be executed in Interactive Mode.");
+      new InteractiveQueryCommand(getCommandText(), getContext()).run();
+      return;
+    }
+
     if ("true".equalsIgnoreCase(SetCommand.setMap.getOrDefault(PMC_TASK_CONSOLE_KEY, "false"))) {
       context.setPMCMode(true);
     } else {

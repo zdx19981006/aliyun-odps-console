@@ -3,7 +3,6 @@ package com.aliyun.openservices.odps.console.utils;
 import com.aliyun.odps.Instance;
 import com.aliyun.odps.Odps;
 import com.aliyun.odps.OdpsException;
-import com.aliyun.odps.Quota;
 import com.aliyun.odps.sqa.SQLExecutor;
 import com.aliyun.odps.sqa.SQLExecutorBuilder;
 import com.aliyun.odps.utils.StringUtils;
@@ -13,7 +12,6 @@ import com.aliyun.openservices.odps.console.commands.SetCommand;
 import com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants;
 
 import java.util.Map;
-import java.util.TimeZone;
 
 /**
  * Created by dongxiao on 2019/12/23.
@@ -57,6 +55,10 @@ public class SessionUtils {
   }
 
   public static String resetSQLExecutor(String sessionName, Instance instance, ExecutionContext context, Odps odps, boolean autoReattach, String quotaName) throws OdpsException {
+    return resetSQLExecutor(sessionName, instance, context, odps, autoReattach, quotaName, false, null);
+  }
+
+  public static String resetSQLExecutor(String sessionName, Instance instance, ExecutionContext context, Odps odps, boolean autoReattach, String quotaName, boolean mcqaV2, String regionId) throws OdpsException {
     SQLExecutorBuilder builder = new SQLExecutorBuilder();
     builder.odps(odps)
         .quotaName(quotaName)
@@ -69,9 +71,11 @@ public class SessionUtils {
         .enableReattach(autoReattach)
         .taskName(ODPSConsoleConstants.SESSION_DEFAULT_TASK_NAME)
         .attachTimeout(context.getAttachTimeout())
-        .recoverFrom(instance);
+        .recoverFrom(instance)
+        .enableMcqaV2(mcqaV2)
+        .regionId(regionId);
     SQLExecutor executor = builder.build();
-    String currentId = executor.getInstance().getId();
+    String currentId = mcqaV2 ? null : executor.getInstance().getId();
     resetSessionContext(executor, odps, context);
     return currentId;
   }
