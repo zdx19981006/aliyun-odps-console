@@ -106,7 +106,8 @@ public class CommandParserUtils {
           "ExternalProjectCommand",
           "CompactCommand",
           "FreezeCommand",
-          "RestoreCommand"
+          "RestoreCommand",
+          "TuneCommand"
       };
 
   private static final String HELP_TAGS_FIELD = "HELP_TAGS";
@@ -219,7 +220,7 @@ public class CommandParserUtils {
     OdpsDeprecatedLogger.getDeprecatedCalls().put("USER_COMMANDS :" + commandLines, 1L);
 
     // 命令行，可支持多个命令
-    List<String> commandLinelist = new AntlrObject(commandLines).splitCommands();
+    List<String> commandLinelist = new AntlrObject(commandLines).splitCommands(sessionContext);
 
     // 如果SqlLinesParser解析出来为空，且与“--”开始，是引号不匹配,这种场景,把query发给相应的command自己处理
     if (commandLinelist.size() == 0 && !commandLines.trim().startsWith("--")) {
@@ -588,7 +589,7 @@ public class CommandParserUtils {
     }
   }
 
-  private static AbstractCommand reflectCommandObject(String commandName, Class<?>[] argTypes,
+  public static AbstractCommand reflectCommandObject(String commandName, Class<?>[] argTypes,
                                                       Object... args) throws ODPSConsoleException {
 
     Class<?> commandClass = null;
@@ -719,6 +720,29 @@ public class CommandParserUtils {
     } else {
       return args;
     }
+  }
+
+  public static Map<String, String> parseArguments(String command) {
+    Map<String, String> arguments = new HashMap<>();
+
+    // 将命令字符串以空格分割
+    String[] tokens = command.split("\\s+");
+    // 遍历分割后的字符串数组
+    for (int i = 0; i < tokens.length; i++) {
+      // 检查当前字符串是否是一个参数标志（以"-"开头）
+      if (tokens[i].startsWith("-") && tokens[i].length() > 1) {
+        String key = tokens[i].substring(1);
+        String value = "true";
+        // 检查后面是否有对应的参数值（不是另一个参数标志）
+        if (i + 1 < tokens.length && !tokens[i + 1].startsWith("-")) {
+          value = tokens[i + 1];
+          i++; // 跳过已使用的参数值
+        }
+        // 将参数添加到map中
+        arguments.put(key, value);
+      }
+    }
+    return arguments;
   }
 
   private static String[] getArgsFromTempFile(String file) throws ODPSConsoleException

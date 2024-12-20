@@ -82,6 +82,7 @@ public class ODPSConsoleConstants {
   public static final String UPDATE_URL = "update_url";
 
   public static final String LOG_VIEW_HOST = "log_view_host";
+  public static final String LOG_VIEW_VERSION = "log_view_version";
   public static final String LOG_VIEW_LIFE = "log_view_life";
   public static final String IS_DEBUG = "debug";
   public static final String ACCOUNT_PROVIDER = "account_provider";
@@ -108,6 +109,9 @@ public class ODPSConsoleConstants {
   public static final String INTERACTIVE_OUTPUT_COMPATIBLE = "interactive_output_compatible";
   public static final String INTERACTIVE_MAX_ATTACH = "interactive_max_attach";
   public static final String ATTACH_SESSION_TIMEOUT = "attach_session_timeout";
+  public static final String KEEP_SESSION_VARIABLES = "keep_session_variables";
+  public static final String NETWORK_READ_TIMEOUT = "network_read_timeout";
+  public static final String NETWORK_CONNECT_TIMEOUT = "network_connect_timeout";
 
   public static final String FALLBACK_PREFIX = "fallback.";
   public static final String FALLBACK_RESOURCE_NOT_ENOUGH = "fallback.resource";
@@ -127,7 +131,10 @@ public class ODPSConsoleConstants {
   public static final String CONSOLE_SQL_RESULT_INSTANCETUNNEL = "console.sql.result.instancetunnel";
   public static final String TASK_MAJOR_VERSION = "odps.task.major.version";
   public static final String ODPS_TASK_WLM_QUOTA = "odps.task.wlm.quota";
+  public static final String SUPPORT_RAW_STRING = "odps.console.support.raw.string";
 
+  public static final String ODPS_INSTANCE_TRYWAIT = "odps.instance.trywait";
+  public static final String ODPS_SQL_SELECT_OUTPUT_FORMAT = "odps.sql.select.output.format";
   public static final String tablePattern = "";
 
   // ACL settings

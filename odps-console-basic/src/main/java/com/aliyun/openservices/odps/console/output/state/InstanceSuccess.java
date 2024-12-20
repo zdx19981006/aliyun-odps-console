@@ -32,7 +32,7 @@ public class InstanceSuccess extends InstanceState {
 
     try {
       Instance.TaskSummary taskSummary = getTaskSummaryV1(context.getOdps(), context.getInstance(),
-                                     context.getTaskStatus().getName());
+                                     context.getTaskStatus().getName(), context.getExecutionContext().getOutputWriter());
 
       context.setSummary(taskSummary);
       reportSummary(taskSummary, context.getExecutionContext().getOutputWriter());
@@ -67,10 +67,12 @@ public class InstanceSuccess extends InstanceState {
   static class Item {
     public MapReduce mapReduce;
   }
+  private static final long MAX_SUMMARY_SIZE = 64 * 1024 * 1024;
 
   // XXX very dirty !!!
   // DO HACK HERE
-  public static Instance.TaskSummary getTaskSummaryV1(Odps odps, Instance i, String taskName) throws Exception {
+  public static Instance.TaskSummary getTaskSummaryV1(Odps odps, Instance i, String taskName,
+                                                      DefaultOutputWriter outputWriter) throws Exception {
     RestClient client = odps.getRestClient();
     Map<String, String> params = new HashMap<String, String>();
     params.put("summary", null);
@@ -78,6 +80,11 @@ public class InstanceSuccess extends InstanceState {
     String queryString = "/projects/" + i.getProject() + "/instances/" + i.getId();
     Response result = client.request(queryString, "GET", params, null, null);
 
+    String contentLength = result.getHeader("Content-Length");
+    if (StringUtils.isNotEmpty(contentLength) && Long.parseLong(contentLength) > MAX_SUMMARY_SIZE) {
+      outputWriter.writeError("WARNING: The instance summary is too large, printing the summary is ignored. If you would like to view the summary, please check the logview.");
+      return new Instance.TaskSummary();
+    }
     Instance.TaskSummary summary = null;
     Item item = new GsonBuilder().disableHtmlEscaping().create()
         .fromJson(new String(result.getBody()), Item.class);

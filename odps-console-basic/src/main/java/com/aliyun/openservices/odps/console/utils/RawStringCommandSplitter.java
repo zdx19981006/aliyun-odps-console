@@ -19,60 +19,73 @@
 
 package com.aliyun.openservices.odps.console.utils;
 
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.COMMENT;
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.END;
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.ESCAPE;
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.NORMAL;
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.PRE_COMMENT;
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.QUOTE;
-import static com.aliyun.openservices.odps.console.utils.CommandSplitter.State.START;
-
-import java.util.ArrayList;
-import java.util.List;
-
 import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.aliyun.openservices.odps.console.utils.RawStringCommandSplitter.State.*;
+
 /**
  * Split a string into commands, and into tokens:
- * 1. remove comments
+ * 1. remove comments(`--`, `#`)
  * 2. remove semicolon(';')
  * 3. ensure quoted string is closed
  *
  * multi-thread unsafe!
  */
-public class CommandSplitter {
+public class RawStringCommandSplitter {
 
-  enum State {
-    START, QUOTE, ESCAPE, NORMAL, PRE_COMMENT, COMMENT, END
+  public boolean getFindRawString() {
+    return findRawString;
   }
 
-  private String input;
+  enum State {
+    START,
+    QUOTE,
+    ESCAPE,
+    PRE_RAW_STRING,
+    RAW_STRING_DELIMITER,
+    RAW_STRING,
+    NORMAL,
+    PRE_COMMENT,
+    COMMENT,
+    END
+  }
+
+  private final String input;
+  private int i = 0;
   private State state;
   private Character quoteType;
-  private StringBuilder commandBuffer;
-  private ArrayList<String> commandResults;
-  private StringBuilder tokenBuffer;
-  private ArrayList<String> tokenResults;
+  private final StringBuilder commandBuffer;
+  private final ArrayList<String> commandResults;
+  private final StringBuilder tokenBuffer;
+  private final ArrayList<String> tokenResults;
   private boolean parsed;
+  private final StringBuilder rawStringDelimiter;
+  private RawStringCommandSplitter checkPoint;
+  private boolean reset = false;
+  private boolean findRawString = false;
 
-  public CommandSplitter(String input) {
+  public RawStringCommandSplitter(String input) {
     this.input = input;
     this.state = START;
     this.quoteType = null;
     this.commandBuffer = new StringBuilder();
-    this.commandResults = new ArrayList<String>();
+    this.commandResults = new ArrayList<>();
     this.tokenBuffer = new StringBuilder();
-    this.tokenResults = new ArrayList<String>();
+    this.tokenResults = new ArrayList<>();
     this.parsed = StringUtils.isNullOrEmpty(input);
+    this.rawStringDelimiter = new StringBuilder();
   }
 
   private void flushBuffer(StringBuilder buffer, ArrayList<String> results, boolean isTrim) {
     if (buffer.length() > 0) {
       String s = buffer.toString();
       String t = s.trim();
-      if (t.length() > 0) {
+      if (!t.isEmpty()) {
         if (isTrim) {
           results.add(t);
         } else {
@@ -129,6 +142,19 @@ public class CommandSplitter {
         commandBuffer.append(c);
         flushTokenBuffer();
         break;
+      case 'r':
+      case 'R':
+        if (reset) {
+          reset = false;
+          state = NORMAL;
+        } else {
+          saveState();
+          state = PRE_RAW_STRING;
+          flushTokenBuffer();
+        }
+        commandBuffer.append(c);
+        tokenBuffer.append(c);
+        break;
       default:
         state = NORMAL;
         commandBuffer.append(c);
@@ -137,7 +163,7 @@ public class CommandSplitter {
   }
 
   private void parse() throws ODPSConsoleException {
-    for(int i = 0; i < input.length(); i++) {
+    for(; i < input.length(); i++) {
       char c = input.charAt(i);
       switch(state) {
         case START:
@@ -154,6 +180,53 @@ public class CommandSplitter {
               break;
             default:
               normalSwitch(c);
+          }
+          break;
+        case PRE_RAW_STRING:
+          if (c == '"' || c == '\'') {
+            quoteType = c;
+            state = RAW_STRING_DELIMITER;
+            commandBuffer.append(c);
+            tokenBuffer.append(c);
+          } else {
+            reset = true;
+            setState(checkPoint);
+            i = i-1;
+          }
+          break;
+        case RAW_STRING_DELIMITER:
+          commandBuffer.append(c);
+          tokenBuffer.append(c);
+          if (c == '(') {
+            state = RAW_STRING;
+            flushTokenBuffer();
+          } else {
+            rawStringDelimiter.append(c);
+          }
+          if (i == input.length()-1) {
+            reset = true;
+            setState(checkPoint);
+            i = i-1;
+          }
+          break;
+        case RAW_STRING:
+          String rawStringEnd = ")" + rawStringDelimiter.toString() + quoteType;
+          int rawStringEndPosition = input.indexOf(rawStringEnd, i);
+          if (rawStringEndPosition >= 0) {
+            commandBuffer.append(input, i, rawStringEndPosition);
+            tokenBuffer.append(input, i, rawStringEndPosition);
+            flushTokenBuffer();
+            tokenBuffer.append(rawStringEnd);
+            commandBuffer.append(rawStringEnd);
+            flushTokenBuffer();
+            // plus ) and '
+            i = rawStringEndPosition + rawStringDelimiter.length() + 1;
+            state = NORMAL;
+            findRawString = true;
+          } else {
+            reset = true;
+            setState(checkPoint);
+            i = i-1;
           }
           break;
         case PRE_COMMENT:
@@ -201,7 +274,7 @@ public class CommandSplitter {
           break;
         default:
           throw new IllegalArgumentException(
-                  String.format("impossible thing happened. pos=%s, char='%s'", i, c));
+              String.format("impossible thing happened. pos=%s, char='%s'", i, c));
       }
     }
 
@@ -209,6 +282,13 @@ public class CommandSplitter {
       case QUOTE:
       case ESCAPE:
         throw new ODPSConsoleException(ODPSConsoleConstants.BAD_COMMAND + " string not closed");
+      case PRE_RAW_STRING:
+      case RAW_STRING:
+      case RAW_STRING_DELIMITER:
+        reset = true;
+        setState(checkPoint);
+        parse();
+        return;
       default:
         // in case last token/command without ";"
         flushTokenBuffer();
@@ -239,5 +319,37 @@ public class CommandSplitter {
     }
     return tokenResults;
   }
+
+  private void saveState() {
+    RawStringCommandSplitter splitter = new RawStringCommandSplitter(input);
+    splitter.setState(this);
+    checkPoint = splitter;
+  }
+
+  private void setState(RawStringCommandSplitter splitter) {
+    this.i = splitter.i;
+    this.state = splitter.state;
+    this.quoteType = splitter.quoteType;
+
+    this.commandBuffer.setLength(0);
+    this.commandBuffer.append(splitter.commandBuffer);
+
+    this.commandResults.clear();
+    this.commandResults.addAll(splitter.commandResults);
+
+    this.tokenBuffer.setLength(0);
+    this.tokenBuffer.append(splitter.tokenBuffer);
+
+    this.tokenResults.clear();
+    this.tokenResults.addAll(splitter.tokenResults);
+
+    this.parsed = splitter.parsed;
+
+    this.rawStringDelimiter.setLength(0);
+    this.rawStringDelimiter.append(splitter.rawStringDelimiter);
+
+    this.findRawString = splitter.findRawString;
+  }
+
 
 }

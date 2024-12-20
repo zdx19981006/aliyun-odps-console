@@ -19,10 +19,14 @@
 
 package com.aliyun.openservices.odps.console.utils.antlr;
 
-import java.util.List;
-
+import com.aliyun.openservices.odps.console.ExecutionContext;
+import com.aliyun.openservices.odps.console.ODPSConsole;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.utils.CommandSplitter;
+import com.aliyun.openservices.odps.console.utils.LogUtil;
+import com.aliyun.openservices.odps.console.utils.RawStringCommandSplitter;
+
+import java.util.List;
 
 
 /**
@@ -37,10 +41,14 @@ import com.aliyun.openservices.odps.console.utils.CommandSplitter;
  */
 public class AntlrObject {
 
+  private String rawCommand;
   private CommandSplitter splitter;
+  private RawStringCommandSplitter rawStringCommandSplitter;
 
   public AntlrObject(String rawCommand) {
+    this.rawCommand = rawCommand;
     splitter = new CommandSplitter(rawCommand);
+    rawStringCommandSplitter = new RawStringCommandSplitter(rawCommand);
   }
 
   /**
@@ -49,7 +57,19 @@ public class AntlrObject {
    * @throws ODPSConsoleException
    */
   public String[] getTokenStringArray() throws ODPSConsoleException {
-    return splitter.getTokens().toArray(new String[]{});
+    try {
+      return splitter.getTokens().toArray(new String[]{});
+    } catch (ODPSConsoleException e) {
+      try {
+        return rawStringCommandSplitter.getTokens().toArray(new String[0]);
+      } catch (Exception e1) {
+        throw e;
+      }
+    }
+  }
+
+  public String[] getRawTokenStringArray() throws ODPSConsoleException {
+    return rawStringCommandSplitter.getTokens().toArray(new String[0]);
   }
 
   /**
@@ -60,5 +80,42 @@ public class AntlrObject {
    */
   public List<String> splitCommands() throws ODPSConsoleException {
     return splitter.getCommands();
+  }
+
+  public List<String> splitCommands(ExecutionContext ctx) throws ODPSConsoleException {
+    if (!ctx.isSupportRawString()) {
+      return splitCommands();
+    }
+
+    List<String> commands = null;
+    ODPSConsoleException e0 = null;
+    try {
+      commands = splitter.getCommands();
+    } catch (ODPSConsoleException e1) {
+      e0 = e1;
+    }
+
+    try {
+      List<String> rawCommands = rawStringCommandSplitter.getCommands();
+
+      if (rawStringCommandSplitter.getFindRawString()) {
+        System.out.println("find raw string");
+        return rawCommands;
+      } else {
+        if (e0 != null) {
+          throw e0;
+        }
+        return commands;
+      }
+
+    } catch (Exception e) {
+      LogUtil.sendFallbackLog(ctx, rawCommand, "split commands, find raw string: " + rawCommand, e);
+      if (e0 == null) {
+        return commands;
+      } else {
+        throw e0;
+      }
+    }
+
   }
 }

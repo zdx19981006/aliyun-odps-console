@@ -19,25 +19,38 @@
 
 package com.aliyun.openservices.odps.console.pub;
 
+import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_READ_LEGACY;
+
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang.BooleanUtils;
+
 import com.aliyun.odps.Column;
 import com.aliyun.odps.Odps;
 import com.aliyun.odps.OdpsException;
 import com.aliyun.odps.PartitionSpec;
 import com.aliyun.odps.Table;
-import com.aliyun.odps.data.ArrowStreamRecordReader;
+import com.aliyun.odps.commons.transport.Response;
+import com.aliyun.odps.data.DefaultRecordReader;
 import com.aliyun.odps.data.Record;
+import com.aliyun.odps.data.RecordReader;
 import com.aliyun.odps.data.converter.OdpsRecordConverter;
 import com.aliyun.odps.data.converter.OdpsRecordConverterBuilder;
+import com.aliyun.odps.rest.ResourceBuilder;
 import com.aliyun.odps.type.TypeInfo;
+import com.aliyun.odps.utils.NameSpaceSchemaUtils;
 import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.commands.AbstractCommand;
@@ -45,9 +58,9 @@ import com.aliyun.openservices.odps.console.commands.SetCommand;
 import com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants;
 import com.aliyun.openservices.odps.console.utils.Coordinate;
 import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
-import org.apache.commons.lang.BooleanUtils;
-
-import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_READ_LEGACY;
+import com.csvreader.CsvWriter;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 /**
  * @author shuman.gansm
@@ -71,6 +84,7 @@ public class ReadTableCommand extends AbstractCommand {
   private List<String> columns;
   private boolean useLegacyType;
   private OdpsRecordConverter formatter;
+  private boolean fallBackToDeprecatedRead = false;
 
   public void setColumns(List<String> columns) {
     this.columns = columns;
@@ -85,7 +99,8 @@ public class ReadTableCommand extends AbstractCommand {
     this.coordinate = coordinate;
     this.columns = columns;
     this.lineNum = lineNum;
-    useLegacyType = BooleanUtils.toBoolean(SetCommand.setMap.getOrDefault(ODPS_READ_LEGACY, "true"));
+    useLegacyType =
+        BooleanUtils.toBoolean(SetCommand.setMap.getOrDefault(ODPS_READ_LEGACY, "true"));
     OdpsRecordConverterBuilder formatterBuilder =
         OdpsRecordConverter.builder().complexFormatHumanReadable().enableParseNull();
     if (useLegacyType) {
@@ -121,23 +136,26 @@ public class ReadTableCommand extends AbstractCommand {
     if (partitionSpec != null && partitionSpec.trim().length() > 0) {
       spec = new PartitionSpec(partitionSpec);
     }
-    ArrowStreamRecordReader reader =
-        (ArrowStreamRecordReader) table.read(spec, columns, lineNum, getContext().getSqlTimezone(),
-                                             useLegacyType, getContext().getTunnelEndpoint());
-    Map<String, TypeInfo>
-        columnNameTypeMap =
-        Arrays.stream(reader.getSchema()).collect(Collectors.toMap(Column::getName, Column::getTypeInfo));
 
-    // get header
-    Map<String, Integer> displayWidth = ODPSConsoleUtils.getDisplayWidth(
-        table.getSchema().getColumns(),
-        table.getSchema().getPartitionColumns(),
-        columns);
+    try (DefaultRecordReader reader = read(table, spec, columns, lineNum,
+                                           getContext().getSqlTimezone(),
+                                           useLegacyType,
+                                           getContext().getTunnelEndpoint())) {
+      Map<String, TypeInfo>
+          columnNameTypeMap =
+          Arrays.stream(reader.getSchema())
+              .collect(Collectors.toMap(Column::getName, Column::getTypeInfo));
 
-    Record record;
-    try {
+      // get header
+      Map<String, Integer> displayWidth = ODPSConsoleUtils.getDisplayWidth(
+          table.getSchema().getColumns(),
+          table.getSchema().getPartitionColumns(),
+          columns);
+
+      Record record;
       if (columns == null) {
-        columns = Arrays.stream(reader.getSchema()).map(Column::getName).collect(Collectors.toList());
+        columns =
+            Arrays.stream(reader.getSchema()).map(Column::getName).collect(Collectors.toList());
       }
       String frame = ODPSConsoleUtils.makeOutputFrame(displayWidth).trim();
       String title =
@@ -168,11 +186,30 @@ public class ReadTableCommand extends AbstractCommand {
       }
       getWriter().writeResult(frame);
     } catch (Exception e) {
-      throw new OdpsException(e.getMessage(), e);
-    } finally {
-      reader.close();
+      if (!fallBackToDeprecatedRead) {
+        fallBackToDeprecatedRead = true;
+        run();
+        sendDeprecatedLog(getStackTraceAsString(e));
+      } else {
+        throw new OdpsException(e.getMessage(), e);
+      }
     }
   }
+
+  private void sendDeprecatedLog(String stackTraceAsString) {
+    try {
+      String resource = ResourceBuilder.buildProjectResource(getCurrentOdps().getDefaultProject());
+      resource = resource + "/logs";
+      JsonObject jsonObject = new JsonObject();
+      jsonObject.add("ReadTableCommand#deprecatedRead", new JsonPrimitive(stackTraceAsString));
+      byte[] bytes = jsonObject.toString().getBytes(StandardCharsets.UTF_8);
+      ByteArrayInputStream body = new ByteArrayInputStream(bytes);
+      getCurrentOdps().getRestClient()
+          .request(resource, "PUT", null, (Map) null, body, (long) bytes.length);
+    } catch (Exception ignored) {
+    }
+  }
+
 
   private String readCvsData(
       String projectName,
@@ -187,32 +224,111 @@ public class ReadTableCommand extends AbstractCommand {
       spec = new PartitionSpec(partition);
     }
     Odps odps = getCurrentOdps();
-    ArrowStreamRecordReader reader = (ArrowStreamRecordReader) odps
-        .tables().get(projectName, schemaName, tableName)
-        .read(spec, columns, top, getContext().getSqlTimezone(), useLegacyType, getContext().getTunnelEndpoint());
-    Map<String, TypeInfo>
-        columnNameTypeMap =
-        Arrays.stream(reader.getSchema()).collect(Collectors.toMap(Column::getName, Column::getTypeInfo));
-    StringBuilder csv = new StringBuilder();
-    if (columns == null) {
-      columns = Arrays.stream(reader.getSchema()).map(Column::getName).collect(Collectors.toList());
-    }
-    String columnLine = String.join(",", columns);
-    csv.append(columnLine).append("\n");
-    Record record;
-    while ((record = reader.read()) != null) {
-      for (String column : columns) {
-        csv.append(
-            Optional.ofNullable(record.get(column))
-                .map(o -> formatter.formatObject(o, columnNameTypeMap.get(column)))
-                .orElse("NULL")).append(",");
+    Table table = odps
+        .tables().get(projectName, schemaName, tableName);
+    try (DefaultRecordReader reader = read(table, spec, columns, top, getContext().getSqlTimezone(),
+                                           useLegacyType,
+                                           getContext().getTunnelEndpoint())) {
+      Map<String, TypeInfo> columnNameTypeMap =
+          Arrays.stream(reader.getSchema())
+              .collect(Collectors.toMap(Column::getName, Column::getTypeInfo));
+
+      StringWriter writer = new StringWriter();
+      CsvWriter csvWriter = new CsvWriter(writer, ',');
+      // force header with qualifier
+      csvWriter.setForceQualifier(true);
+
+      if (columns == null) {
+        columns =
+            Arrays.stream(reader.getSchema()).map(Column::getName).collect(Collectors.toList());
       }
-      csv.deleteCharAt(csv.length() - 1);
-      csv.append("\n");
+      csvWriter.writeRecord(columns.toArray(new String[0]), true);
+      csvWriter.setForceQualifier(false);
+
+      Record record;
+      while ((record = reader.read()) != null) {
+        for (String column : columns) {
+          csvWriter.write(Optional.ofNullable(record.get(column))
+                              .map(o -> formatter.formatObject(o, columnNameTypeMap.get(column)))
+                              .orElse("NULL"), true);
+        }
+        csvWriter.endRecord();
+      }
+
+      csvWriter.flush();
+      csvWriter.close();
+      return writer.toString();
+    } catch (Exception e) {
+      if (!fallBackToDeprecatedRead) {
+        fallBackToDeprecatedRead = true;
+        String csv = readCvsData(projectName, schemaName, tableName, partition, columns, top);
+        sendDeprecatedLog(getStackTraceAsString(e));
+        return csv;
+      } else {
+        throw new OdpsException(e.getMessage(), e);
+      }
     }
-    reader.close();
-    return csv.toString();
   }
+
+  private DefaultRecordReader read(Table table, PartitionSpec spec, List<String> columns,
+                                   Integer lineNum, String sqlTimezone, boolean useLegacyType,
+                                   String tunnelEndpoint) throws OdpsException,
+                                                                 ODPSConsoleException {
+    if (!fallBackToDeprecatedRead) {
+      return (DefaultRecordReader) table.read(spec, columns, lineNum, sqlTimezone, useLegacyType,
+                                              tunnelEndpoint);
+    } else {
+      return (DefaultRecordReader) deprecatedRead(table, spec, columns, lineNum, sqlTimezone);
+    }
+  }
+
+
+  public RecordReader deprecatedRead(Table table, PartitionSpec partition, List<String> columns,
+                                     int limit,
+                                     String timezone)
+      throws OdpsException, ODPSConsoleException {
+    if (limit < 0) {
+      throw new OdpsException("limit number should >= 0.");
+    }
+    Map<String, String> params = NameSpaceSchemaUtils.initParamsWithSchema(table.getSchemaName());
+    params.put("data", null);
+
+    if (partition != null && partition.keys().size() > 0) {
+      params.put("partition", partition.toString());
+    }
+
+    if (columns != null && columns.size() != 0) {
+      String column = "";
+      for (String temp : columns) {
+        column += temp;
+        column += ",";
+      }
+      column = column.substring(0, column.lastIndexOf(","));
+      params.put("cols", column);
+    }
+
+    if (limit != -1) {
+      params.put("linenum", String.valueOf(limit));
+    }
+
+    Map<String, String> header = null;
+    if (timezone != null) {
+      header = new HashMap<>();
+      header.put("x-odps-sql-timezone", timezone);
+    }
+
+    String resource = ResourceBuilder.buildTableResource(table.getProject(), table.getName());
+    Response resp = getCurrentOdps().getRestClient().request(resource, "GET", params, header, null);
+    return new DefaultRecordReader(new ByteArrayInputStream(resp.getBody()), table.getSchema());
+  }
+
+  public static String getStackTraceAsString(Exception e) {
+    StringWriter sw = new StringWriter();
+    PrintWriter pw = new PrintWriter(sw);
+    e.printStackTrace(pw);
+    return sw.toString();
+  }
+
 
   public static ReadTableCommand parse(String commandString, ExecutionContext sessionContext)
       throws ODPSConsoleException {

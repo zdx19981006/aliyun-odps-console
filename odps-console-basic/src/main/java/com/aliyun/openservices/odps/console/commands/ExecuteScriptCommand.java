@@ -42,7 +42,7 @@ public class ExecuteScriptCommand extends MultiClusterCommandBase {
   }
 
   void parseSettings() throws ODPSConsoleException {
-    List<String> cmds = new AntlrObject(getCommandText().trim()).splitCommands();
+    List<String> cmds = new AntlrObject(getCommandText().trim()).splitCommands(getContext());
     int i = 0;
     for (; i < cmds.size(); i++) {
       String cmd = cmds.get(i).trim();

@@ -19,30 +19,8 @@
 
 package com.aliyun.openservices.odps.console.pub;
 
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang.StringEscapeUtils;
-
-import com.aliyun.odps.Column;
-import com.aliyun.odps.Odps;
-import com.aliyun.odps.OdpsException;
-import com.aliyun.odps.Partition;
-import com.aliyun.odps.PartitionSpec;
-import com.aliyun.odps.StorageTierInfo;
+import com.aliyun.odps.*;
 import com.aliyun.odps.StorageTierInfo.StorageTier;
-import com.aliyun.odps.Table;
 import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.ErrorCode;
 import com.aliyun.openservices.odps.console.ExecutionContext;
@@ -50,10 +28,22 @@ import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.commands.AbstractCommand;
 import com.aliyun.openservices.odps.console.common.CommandUtils;
 import com.aliyun.openservices.odps.console.output.DefaultOutputWriter;
-import com.aliyun.openservices.odps.console.utils.Coordinate;
-import com.aliyun.openservices.odps.console.utils.PluginUtil;
+import com.aliyun.openservices.odps.console.utils.*;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.StringEscapeUtils;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Describe table meta
@@ -126,6 +116,33 @@ public class DescribeTableCommand extends AbstractCommand {
     String table = coordinate.getObjectName();
     String partition = coordinate.getPartitionSpec();
 
+    // 4. external project v2 return null
+    boolean isExternalProject = false;
+    try {
+      Odps odps = OdpsConnectionFactory.createOdps(getContext());
+      String propStr =
+              odps.projects().get(coordinate.getProjectName()).getAllProperties().getOrDefault(
+                      "external_project_properties", "{}");
+      Map props = new GsonBuilder().create().fromJson(propStr, Map.class);
+      isExternalProject = (boolean)props.getOrDefault("isExternalCatalogBound",
+              false);
+    } catch (Exception e) {
+      LogUtil.sendFallbackLog(getContext(), getCommandText(), "get external project properties failed", e);
+    }
+
+    if (isExternalProject) {
+      try {
+        Class<?> commandClass = CommandParserUtils.getClassFromPlugin("com.aliyun.openservices.odps.console.QueryCommand");
+        Method parseMethod = commandClass.getDeclaredMethod("parse", String.class, ExecutionContext.class);
+        Object commandObject = parseMethod.invoke(null,
+                new Object[] {getCommandText(), getContext() });
+        ((AbstractCommand) commandObject).execute();
+      } catch (Exception e) {
+        LogUtil.sendFallbackLog(getContext(), getCommandText(), "show tables in sql", e);
+      }
+      return;
+    }
+
     if (table == null || table.length() == 0) {
       throw new OdpsException(
           ErrorCode.INVALID_COMMAND
@@ -173,6 +190,8 @@ public class DescribeTableCommand extends AbstractCommand {
 
     boolean extended = m.group(EXTENDED_GROUP) != null;
     Coordinate coordinate = Coordinate.getTableCoordinate(m, cxt);
+
+
 
     return new DescribeTableCommand(cmd, cxt, coordinate, extended);
   }
@@ -270,6 +289,8 @@ public class DescribeTableCommand extends AbstractCommand {
           if (t.getRefreshCron() != null) {
             w.printf("| Refresh Cron: %-68s |\n", t.getRefreshCron());
           }
+        } else if (t.isObjectTable()) {
+          w.printf("| ObjectTable: YES        | Size: %-50d |\n", t.getSize());
         } else {
           w.printf("| InternalTable: YES      | Size: %-50d |\n", t.getSize());
         }
@@ -371,7 +392,7 @@ public class DescribeTableCommand extends AbstractCommand {
         }
 
         boolean isAcid2Table = t.isTransactional() && t.getPrimaryKey() != null && !t.getPrimaryKey().isEmpty();
-        if (pt.getClusterInfo() != null && !isAcid2Table) {
+        if (pt.getClusterInfo() != null) {
           appendClusterInfo(pt.getClusterInfo(), w);
         }
         if (isAcid2Table) {

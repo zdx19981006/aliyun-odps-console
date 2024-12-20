@@ -58,6 +58,13 @@ public class UseQuotaCommand extends AbstractCommand {
       SetCommand.setMap.remove("odps.task.wlm.quota");
       getContext().setQuotaName("");
       getContext().setQuotaRegionId("");
+      if (getContext().isMcqaV2()) {
+        getContext().setMcqaV2(false);
+        getContext().setInteractiveQuery(false);
+        SessionUtils.clearSessionContext(getContext());
+      }
+      getContext().getOutputWriter()
+          .writeError("Clear quota successfully.");
       return;
     }
 
@@ -83,12 +90,20 @@ public class UseQuotaCommand extends AbstractCommand {
       if (quota.getResourceSystemType() != null
           && "FUXI_VW".equalsIgnoreCase(quota.getResourceSystemType())) {
         getContext().setInteractiveQuery(true);
+        getContext().setMcqaV2(true);
         SessionUtils.resetSQLExecutor(null, null, getContext(), getCurrentOdps(), false,
                                       quota.getNickname(), true, regionId);
       } else {
         // mcqa v2 no need to set hints
         String value = String.format("%s@%s", quota.getNickname(), quota.getRegionId());
         SetCommand.setMap.put("odps.task.wlm.quota", value);
+      }
+      if (StringUtils.isNullOrEmpty(regionId)) {
+        getContext().getOutputWriter()
+            .writeError("Use quota " + quotaName + " successfully.");
+      } else {
+        getContext().getOutputWriter()
+            .writeError("Use quota " + quotaName + " in region " + regionId + " successfully.");
       }
     } catch (NoSuchObjectException e) {
       String errMsg = "Quota " + quotaName + " is not found in region " + regionId

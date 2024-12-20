@@ -117,7 +117,7 @@ public class InstanceRunner {
     job.setRunningCluster(context.getRunningCluster());
 
     try {
-      instance = odps.instances().create(job);
+      instance = odps.instances().create(job, context.isJobTryWait());
       return instance;
     } catch (OdpsException e) {
       if (!isRetry(e)) {

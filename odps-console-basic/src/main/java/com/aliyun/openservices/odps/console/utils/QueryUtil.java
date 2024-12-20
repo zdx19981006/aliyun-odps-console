@@ -100,7 +100,8 @@ public class QueryUtil {
   public static void printSubQueryLogview(Odps odps, Instance i, String taskName, ExecutionContext context) throws OdpsException {
     List<String> subId = new ArrayList<>();
     try {
-      String summary = InstanceSuccess.getTaskSummaryV1(odps, i, taskName).getSummaryText();
+      String summary = InstanceSuccess.getTaskSummaryV1(odps, i, taskName,
+                                                        context.getOutputWriter()).getSummaryText();
       for (String txt : summary.split("\n")) {
         txt = txt.trim();
         Matcher matcher = PATTERN.matcher(txt);

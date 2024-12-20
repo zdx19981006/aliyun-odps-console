@@ -10,10 +10,13 @@ import java.util.List;
 
 import com.aliyun.odps.Instance;
 import com.aliyun.odps.OdpsException;
+import com.aliyun.odps.TableSchema;
 import com.aliyun.odps.Task;
+import com.aliyun.odps.data.Record;
 import com.aliyun.odps.data.ResultSet;
 import com.aliyun.odps.task.SQLTask;
 import com.aliyun.odps.tunnel.TunnelException;
+import com.aliyun.odps.utils.CSVRecordParser;
 import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.utils.FormatUtils;
 import com.aliyun.openservices.odps.console.utils.statemachine.State;
@@ -63,6 +66,7 @@ public class InstanceTerminated extends InstanceState {
         context.getInstance().getRawTaskResults().get(0);
     // The result contains error message when the task failed
     String resultStr = taskResult.getResult().getString();
+    String format = taskResult.getResult().getFormat();
 
     // If the service doesn't support optimized key-path, call getStatus()
     Instance.TaskStatus.Status taskStatus;
@@ -82,10 +86,35 @@ public class InstanceTerminated extends InstanceState {
       throw new OdpsException(
           "Task not successfully terminated: status[" + taskStatus + "]");
     }
-
-    List<String> result = new ArrayList<>();
-    result.add(resultStr);
-    context.setResult(result.iterator());
+    if ("csv".equalsIgnoreCase(format) && !context.getExecutionContext().isMachineReadable()) {
+      // interactive mode hardcode "odps.sql.select.output.format=csv"
+      CSVRecordParser.ParseResult parseResult = CSVRecordParser.parse(resultStr);
+      List<Record> records = parseResult.getRecords();
+      TableSchema schema = parseResult.getSchema();
+      if (schema.getColumns().isEmpty()) {
+        throw new OdpsException("No columns in result. " + resultStr);
+      }
+      ResultSet resultSet = new ResultSet(records.iterator(), schema, records.size());
+      DateTimeFormatter dateFormat = FormatUtils.DATETIME_FORMATTER;
+      if (!StringUtils.isNullOrEmpty(context.getExecutionContext().getSqlTimezone())) {
+        try {
+          ZoneId zoneId = ZoneId.of(context.getExecutionContext().getSqlTimezone());
+          dateFormat = dateFormat.withZone(zoneId);
+        } catch (Exception e) {
+          throw new OdpsException(
+              "Failed to get TimeZone, " + e.getMessage(), e);
+        }
+      }
+      Iterator<String> result = new FormatUtils.FormattedResultSet(
+          resultSet,
+          FormatUtils.DEFAULT_COMPLEX_TYPE_FORMAT_GSON,
+          dateFormat);
+      context.setResult(result);
+    } else {
+      List<String> result = new ArrayList<>();
+      result.add(resultStr);
+      context.setResult(result.iterator());
+    }
   }
 
   private void setTaskResultByInstanceTunnel(InstanceStateContext context)

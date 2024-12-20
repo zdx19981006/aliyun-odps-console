@@ -304,7 +304,16 @@ public class ODPSConsoleUtils {
 
   public static String generateLogView(Odps odps, Instance instance, ExecutionContext context) {
     try {
-      return odps.logview().generateLogView(instance, context.getLogViewLife());
+      if ("2.0".equalsIgnoreCase(context.getLogViewVersion())){
+        String host = "https://maxcompute.console.aliyun.com";
+        String region = odps.projects().get().getRegionId();
+        if (StringUtils.isNullOrEmpty(region)) {
+          throw new IllegalArgumentException("region is null");
+        }
+        return host + "/" + region + "/job-insights?h=" + odps.getEndpoint() + "&p=" + odps.getDefaultProject() + "&i=" + instance.getId();
+      } else {
+        return odps.logview().generateLogView(instance, context.getLogViewLife());
+      }
     } catch (Exception e) {
       context.getOutputWriter().writeError("Generate LogView Failed:" + e.getMessage());
     }

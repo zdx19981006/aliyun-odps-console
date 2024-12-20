@@ -62,21 +62,9 @@ public abstract class MultiClusterCommandBase extends AbstractCommand {
     OdpsHooks hooks = runner.getInstance().getOdpsHooks();
     runner.getInstance().setOdpsHooks(null);
 
-    // session should exit after submitting PMCTask for D2 resource concern
-    if (context.isPMCMode() && SetCommand.setMap.get("odps.progressive.instants") == null) {
-      instanceId = runner.getInstance().getId();
-      runner.printLogview();
-      return;
-    }
-
     if (context.isAsyncMode()) {
       instanceId = runner.getInstance().getId();
       // 如果是异步模式,提交job后直接退出
-      return;
-    }
-    if (context.isInteractiveQuery()) {
-      ExecutionContext.setInstanceRunner(runner);
-      runner.printLogview();
       return;
     }
     runner.waitForCompletion();
@@ -87,9 +75,6 @@ public abstract class MultiClusterCommandBase extends AbstractCommand {
     try {
       reportResult(runner);
     } finally {
-      if (context.isPMCMode()) {
-        QueryUtil.printSubQueryLogview(getCurrentOdps(), runner.getInstance(), PMC_TASK_NAME, context);
-      }
       if (hooks != null) {
         hooks.after(runner.getInstance(), getCurrentOdps());
       }

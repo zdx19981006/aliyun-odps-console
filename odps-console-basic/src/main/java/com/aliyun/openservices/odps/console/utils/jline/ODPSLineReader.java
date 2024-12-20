@@ -2,6 +2,9 @@ package com.aliyun.openservices.odps.console.utils.jline;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -165,8 +168,17 @@ public class ODPSLineReader {
   private void setHistory(LineReaderBuilder readerBuilder) {
     // TODO: make it an odps constant
     String historyfile = ".odpscmd.history";
-    String historyFilePath = System.getProperty("user.home") + File.separator + historyfile;
-    readerBuilder.variable(LineReader.HISTORY_FILE, new File(historyFilePath));
+    Path homeDir = Paths.get(System.getProperty("user.home"));
+
+    if (Files.isSymbolicLink(homeDir)) {
+        try {
+            homeDir = homeDir.toRealPath();
+        } catch (IOException e) {
+            throw new RuntimeException("Can not get user.home real path");
+        }
+    }
+
+    readerBuilder.variable(LineReader.HISTORY_FILE, homeDir.resolve(historyfile));
   }
 
   public static ODPSLineReader getInstance() {

@@ -20,6 +20,7 @@
 package com.aliyun.openservices.odps.console.resource;
 
 import java.io.PrintStream;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -94,7 +95,7 @@ public class DescribeFunctionCommand extends AbstractCommand {
     if (function.isSqlFunction()) {
       System.out.printf(formatPattern, "SQL Definition Text", function.getSqlDefinitionText());
     } else if (function.isEmbeddedFunction()) {
-      System.out.printf(formatPattern, "Class", function.getClassPath());
+      printClassAndResources(function, formatPattern);
       System.out.printf(formatPattern, "Lang", function.getEmbeddedFunctionProgramLanguage());
       String filename = function.getEmbeddedFunctionFilename();
       if (null != filename) {
@@ -103,9 +104,17 @@ public class DescribeFunctionCommand extends AbstractCommand {
       System.out.println("Code");
       System.out.println(function.getEmbeddedFunctionCode());
     } else {
-      System.out.printf(formatPattern, "Class", function.getClassPath());
+      printClassAndResources(function, formatPattern);
+    }
+  }
+
+  private void printClassAndResources(Function function, String formatPattern) {
+    System.out.printf(formatPattern, "Class", function.getClassPath());
+
+    List<String> resourceFullNames = function.getResourceFullNames();
+    if (resourceFullNames != null) {
       StringBuilder builder = new StringBuilder();
-      for (String name : function.getResourceFullNames()) {
+      for (String name : resourceFullNames) {
         if (builder.length() != 0) {
           builder.append(",");
         }

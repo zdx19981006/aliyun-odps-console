@@ -20,31 +20,16 @@
 package com.aliyun.openservices.odps.console;
 
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.sql.Timestamp;
-import java.text.DateFormat;
-
-
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import com.aliyun.openservices.odps.console.commands.SetCommand;
-import org.jline.reader.UserInterruptException;
 
 import org.jline.reader.UserInterruptException;
 
 import com.aliyun.odps.Instance;
 import com.aliyun.odps.OdpsException;
 import com.aliyun.odps.Task;
-
-import com.aliyun.odps.data.Record;
-import com.aliyun.odps.data.ResultSet;
-import com.aliyun.odps.data.SimpleStruct;
-
-
 import com.aliyun.odps.task.SQLCostTask;
 import com.aliyun.odps.task.SQLTask;
 import com.aliyun.odps.task.SqlPlanTask;
@@ -55,12 +40,6 @@ import com.aliyun.openservices.odps.console.output.InstanceRunner;
 import com.aliyun.openservices.odps.console.utils.FormatUtils;
 import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
 import com.aliyun.openservices.odps.console.utils.QueryUtil;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonSerializer;
-
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -167,10 +146,6 @@ public class QueryCommand extends MultiClusterCommandBase {
   }
 
   protected String getTaskName(boolean isDryRun) {
-    if (getContext().isPMCMode()) {
-      return PMC_TASK_NAME;
-    }
-
     if (isDryRun) {
       return "console_sqlplan_task_" + Calendar.getInstance().getTimeInMillis();
     } else {
@@ -188,14 +163,8 @@ public class QueryCommand extends MultiClusterCommandBase {
       return;
     }
 
-    if ("true".equalsIgnoreCase(SetCommand.setMap.getOrDefault(PMC_TASK_CONSOLE_KEY, "false"))) {
-      context.setPMCMode(true);
-    } else {
-      context.setPMCMode(false);
-    }
-
     // PMCTask always accompanied by triggerandwait command, thus async mode is supported by select
-    if ((!getContext().isPMCMode()) && (isSelectCommand && context.isAsyncMode())) {
+    if (isSelectCommand && context.isAsyncMode()) {
       getWriter().writeError("[async mode]: can't support select command.");
       return;
     }

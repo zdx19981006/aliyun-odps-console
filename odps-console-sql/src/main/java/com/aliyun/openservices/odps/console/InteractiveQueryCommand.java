@@ -141,7 +141,11 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
         }
         // logview url has been appended into executionLog when query fallback
         if (needAppendLogview) {
-          logs.add(sqlExecutor.getLogView());
+          String logviewUrl = ODPSConsoleUtils.generateLogView(odps, sqlExecutor.getInstance(), executionContext);
+          if (!StringUtils.isNullOrEmpty(logviewUrl)) {
+            executionContext.getOutputWriter().writeError("Log view:");
+            executionContext.getOutputWriter().writeError(logviewUrl);
+          }
         }
         // rerun or fallback, recreate reporter
         for (String log : logs) {
@@ -184,11 +188,14 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
               sqlExecutor.cancel();
               shouldCancel = false;
             }
-            List<Instance.StageProgress> stages = sqlExecutor.getProgress();
-
-            context.setTaskProgress(stages);
-            if (disableOutput.get() == false) {
-              reporter.printProgress(false);
+            try {
+              List<Instance.StageProgress> stages = sqlExecutor.getProgress();
+              context.setTaskProgress(stages);
+              if (!disableOutput.get()) {
+                reporter.printProgress(false);
+              }
+            } catch (Exception ignored) {
+              // 如果拿进度出错，重复拿
             }
           } catch (Exception e) {
             context.getExecutionContext().getOutputWriter()
@@ -290,7 +297,7 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
     }
   }
 
-  private void getQueryResult(long startTime) throws ODPSConsoleException {
+  private void getQueryResult(long startTime) throws ODPSConsoleException, OdpsException {
     SQLExecutor executor = ExecutionContext.getExecutor();
     if (this.getContext().isInteractiveOutputCompatible()) {
       getWriter().writeResult("ID = " + executor.getInstance().getId());
@@ -330,7 +337,7 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
       getWriter().writeDebug(postMessage);
     } catch (OdpsException e) {
       waitLogviewGenerated();
-      throw new ODPSConsoleException(e.toString(), e);
+      throw e;
     } catch (IOException e) {
       waitLogviewGenerated();
       throw new ODPSConsoleException(e.getMessage(), e);

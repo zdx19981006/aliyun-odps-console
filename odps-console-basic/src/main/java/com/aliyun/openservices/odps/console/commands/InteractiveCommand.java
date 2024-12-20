@@ -95,6 +95,10 @@ public class InteractiveCommand extends AbstractCommand {
       SessionUtils.autoAttachSession(getContext(), getCurrentOdps());
     }
 
+    if (getContext().getLiteMode() == null) {
+      getContext().setLiteMode(true);
+    }
+
     // q;会退出，还有一种情况，ctrl+d时inputStr返回null
     while (inputStr != null) {
       // 和declient一样，在交互模式下，忽略注释行

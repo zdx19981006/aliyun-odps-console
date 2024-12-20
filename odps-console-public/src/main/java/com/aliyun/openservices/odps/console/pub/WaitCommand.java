@@ -118,13 +118,14 @@ public class WaitCommand extends AbstractCommand {
     Odps odps = getCurrentOdps();
     ExecutionContext context = getContext();
     if (id != null) {
-      if (id.endsWith("_mcqa") && context.getQuotaName() == null) {
-        throw new ODPSConsoleException("Quota name is required for MCQA 2.0 instance, "
-                                       + "'use quota xxx;' to set quota name.");
-      }
       Instance instance =
-          odps.instances().get(odps.getDefaultProject(), id, context.getQuotaName(),
-                               context.getQuotaRegionId());
+          odps.instances().get(odps.getDefaultProject(), id);
+      if (instance.getId().endsWith("_mcqa")) {
+        // tricky way to add mcqa_query_cookie to instance
+        instance.setMcqaV2(false);
+        instance.reload();
+        instance.setMcqaV2(true);
+      }
       InstanceRunner runner = new InstanceRunner(odps, instance, context);
       runner.waitForCompletion();
 

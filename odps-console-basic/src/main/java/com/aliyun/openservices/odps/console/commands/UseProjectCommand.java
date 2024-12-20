@@ -134,7 +134,7 @@ public class UseProjectCommand extends DirectCommand {
     getContext().setQuotaName(null);
     getContext().setQuotaRegionId(null);
     // Interactive session
-    if (getContext().isInteractiveQuery()) {
+    if (getContext().isInteractiveQuery() && !getContext().isMcqaV2()) {
       getContext().getOutputWriter().writeError(
           "You are under interactive mode, use another project will exit interactive mode.");
       getContext().getOutputWriter().writeError("Exiting...");

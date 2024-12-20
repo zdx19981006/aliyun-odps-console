@@ -87,7 +87,16 @@ public class StopInstanceCommand extends AbstractCommand {
   public void run() throws OdpsException, ODPSConsoleException {
 
     Odps odps = getCurrentOdps();
-    Instance instance = odps.instances().get(instanceId);
+    Instance instance =
+        odps.instances().get(getContext().getProjectName(), instanceId);
+
+    if (instance.getId().endsWith("_mcqa")) {
+      // tricky way to add mcqa_query_cookie to instance
+      instance.setMcqaV2(false);
+      instance.reload();
+      instance.setMcqaV2(true);
+    }
+
     instance.stop();
 
     if (synchronizeFlag) {

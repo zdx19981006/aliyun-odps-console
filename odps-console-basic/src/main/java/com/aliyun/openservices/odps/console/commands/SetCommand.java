@@ -29,11 +29,14 @@ import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstant
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.OBJECT_CREATOR_HAS_GRANT_PERMISSION;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_DEFAULT_SCHEMA;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_INSTANCE_PRIORITY;
+import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_INSTANCE_TRYWAIT;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_NAMESPACE_SCHEMA;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_RUNNING_CLUSTER;
+import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_SQL_SELECT_OUTPUT_FORMAT;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_SQL_TIMEZONE;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.ODPS_TASK_WLM_QUOTA;
 import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.PROJECT_PROTECTION;
+import static com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants.SUPPORT_RAW_STRING;
 
 import java.io.PrintStream;
 import java.util.Arrays;
@@ -49,6 +52,8 @@ import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants;
 import com.aliyun.openservices.odps.console.utils.FileUtil;
+import com.aliyun.openservices.odps.console.utils.LogUtil;
+import com.google.gson.GsonBuilder;
 
 /**
  * set\alias命令
@@ -103,6 +108,22 @@ public class SetCommand extends AbstractCommand {
   @Override
   public void run() throws OdpsException, ODPSConsoleException {
     if (isSet) {
+      if (ODPS_SQL_SELECT_OUTPUT_FORMAT.equalsIgnoreCase(key)) {
+        if (value.equalsIgnoreCase("csv")) {
+          getContext().setMachineReadable(true);
+        } else if (value.equalsIgnoreCase("HumanReadable")) {
+          getContext().setMachineReadable(false);
+        }
+      }
+
+      if (ODPS_INSTANCE_TRYWAIT.equalsIgnoreCase(key)) {
+        getContext().setIsJobTryWait(Boolean.parseBoolean(value));
+      }
+
+      if (SUPPORT_RAW_STRING.equalsIgnoreCase(key)) {
+        getContext().setSupportRawString(Boolean.parseBoolean(value));
+      }
+
       if (ODPS_INSTANCE_PRIORITY.equalsIgnoreCase(key)) {
         try {
           getContext().setPriority(Integer.parseInt(value));
@@ -178,7 +199,17 @@ public class SetCommand extends AbstractCommand {
               "Can't set default schema if odps.namespace.schema is false");
         }
 
-        if (!getCurrentOdps().schemas().exists(value)) {
+        boolean isExternalProject = false;
+        try {
+          String propStr = getCurrentOdps().projects().get().getAllProperties().getOrDefault(
+                          "external_project_properties", "{}");
+          Map props = new GsonBuilder().create().fromJson(propStr, Map.class);
+          isExternalProject = (boolean) props.getOrDefault("isExternalCatalogBound",
+                  false);
+        } catch (Exception e) {
+          LogUtil.sendFallbackLog(getContext(), getCommandText(), "get external project properties failed", e);
+        }
+        if (!isExternalProject && !getCurrentOdps().schemas().exists(value)) {
           throw new ODPSConsoleException(
               "schema " + value + " not exists in project " + getCurrentOdps().getDefaultProject());
         }

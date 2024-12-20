@@ -19,15 +19,6 @@
 
 package com.aliyun.openservices.odps.console;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.net.URLDecoder;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TimeZone;
-
 import com.aliyun.odps.account.Account.AccountProvider;
 import com.aliyun.odps.sqa.FallbackPolicy;
 import com.aliyun.odps.sqa.SQLExecutor;
@@ -41,6 +32,16 @@ import com.aliyun.openservices.odps.console.utils.LocalCacheUtils;
 import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import org.apache.commons.lang.BooleanUtils;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TimeZone;
 
 public class ExecutionContext implements Cloneable {
 
@@ -57,6 +58,7 @@ public class ExecutionContext implements Cloneable {
 
   private boolean initialized = false;
 
+  private boolean supportRawString = true;
   private String projectName = "";
   private String schemaName = null;
   private String parseSchemaName = null;
@@ -84,6 +86,7 @@ public class ExecutionContext implements Cloneable {
   private LocalCacheUtils.CacheItem localCache = null;
   private boolean odpsNamespaceSchema = false;
   private boolean parseNamespaceSchema = false;
+  private boolean isMcqaV2 = false;
 
   public boolean isInteractiveOutputCompatible() {
     return interactiveOutputCompatible;
@@ -101,6 +104,14 @@ public class ExecutionContext implements Cloneable {
 
   public void setInteractiveMode(boolean interactiveMode) {
     this.interactiveMode = interactiveMode;
+  }
+
+  public boolean isMcqaV2() {
+    return isMcqaV2;
+  }
+
+  public void setMcqaV2(boolean mcqaV2) {
+    isMcqaV2 = mcqaV2;
   }
 
   // commands扩展
@@ -126,6 +137,8 @@ public class ExecutionContext implements Cloneable {
 
   private int consoleWidth = 150;
   private boolean isAsyncMode = false;
+
+  private boolean isJobTryWait = false;
   private boolean pMCMode = false;
   private int step = 0;
 
@@ -140,6 +153,7 @@ public class ExecutionContext implements Cloneable {
 
   private DefaultOutputWriter outputWriter = new DefaultOutputWriter(this);
 
+  private String logViewVersion;
   private String logViewHost;
   private int logViewLife = 30 * 24; // hours
 
@@ -188,13 +202,16 @@ public class ExecutionContext implements Cloneable {
    * In lite mode, the end to end execution time is optimized by:
    *   1. Skip the instance summary
    */
-  private boolean liteMode;
+  private Boolean liteMode;
 
 
   /**
    * when this flag is true, [use project xxx] command with default trigger [use project xxx --with-settings]
    */
   private boolean useProjectWithSettings = false;
+  private int readTimeout;
+  private int connectTimeout;
+
 
   public boolean isInitialized() {
     return initialized;
@@ -223,12 +240,28 @@ public class ExecutionContext implements Cloneable {
   public ExecutionContext() {
   }
 
+  public void setSupportRawString(boolean supportRawString) {
+    this.supportRawString = supportRawString;
+  }
+
+  public boolean isSupportRawString() {
+    return supportRawString;
+  }
+
   public String getLogViewHost() {
     return logViewHost;
   }
 
   public void setLogViewHost(String logViewHost) {
     this.logViewHost = logViewHost;
+  }
+
+  public String getLogViewVersion() {
+    return logViewVersion;
+  }
+
+  public void setLogViewVersion(String logViewVersion) {
+    this.logViewVersion = logViewVersion;
   }
 
   // hours
@@ -273,12 +306,12 @@ public class ExecutionContext implements Cloneable {
     this.isAsyncMode = isAsyncMode;
   }
 
-  public boolean isPMCMode() {
-    return pMCMode;
+  public boolean isJobTryWait() {
+    return isJobTryWait;
   }
 
-  public void setPMCMode(boolean pmcMode) {
-    this.pMCMode = pmcMode;
+  public void setIsJobTryWait(boolean isJobTryWait) {
+    this.isJobTryWait = isJobTryWait;
   }
 
   public boolean isDryRun() {
@@ -575,14 +608,22 @@ public class ExecutionContext implements Cloneable {
       String datahubEndpoint = properties.getProperty(ODPSConsoleConstants.DATAHUB_ENDPOINT);
       String runningCluster = properties.getProperty(ODPSConsoleConstants.RUNNING_CLUSTER);
       String logViewHost = properties.getProperty(ODPSConsoleConstants.LOG_VIEW_HOST);
+      String logViewVersion = properties.getProperty(ODPSConsoleConstants.LOG_VIEW_VERSION);
       String logViewLife = properties.getProperty(ODPSConsoleConstants.LOG_VIEW_LIFE);
       String updateUrl = properties.getProperty(ODPSConsoleConstants.UPDATE_URL);
       String odpsCupidProxyEndpoint = properties.getProperty(ODPSConsoleConstants.CUPID_PROXY_END_POINT);
       String interactiveSessionMode = properties.getProperty(ODPSConsoleConstants.ENABLE_INTERACTIVE_MODE);
       String interactiveSessionName = properties.getProperty(ODPSConsoleConstants.INTERACTIVE_SERVICE_NAME);
       String interactiveOutputCompatible = properties.getProperty(ODPSConsoleConstants.INTERACTIVE_OUTPUT_COMPATIBLE);
+      String keepSessionVariables = properties.getProperty(ODPSConsoleConstants.KEEP_SESSION_VARIABLES);
+      String readTimeout = properties.getProperty(ODPSConsoleConstants.NETWORK_READ_TIMEOUT);
+      String connectTimeout = properties.getProperty(ODPSConsoleConstants.NETWORK_CONNECT_TIMEOUT);
 
       context.setOdpsCupidProxyEndpoint(odpsCupidProxyEndpoint);
+
+      if (!StringUtils.isNullOrEmpty(logViewVersion)) {
+        context.setLogViewVersion(logViewVersion);
+      }
 
       context.setLogViewHost(logViewHost);
       if (!StringUtils.isNullOrEmpty(logViewLife)) {
@@ -746,6 +787,16 @@ public class ExecutionContext implements Cloneable {
           String value = properties.getProperty(propertyName).trim();
           context.predefinedSetCommands.put(key, value);
         }
+      }
+
+      if (!StringUtils.isNullOrEmpty(keepSessionVariables)) {
+        context.setUseProjectWithSettings(BooleanUtils.toBoolean(keepSessionVariables));
+      }
+      if (!StringUtils.isNullOrEmpty(readTimeout)) {
+        context.setReadTimeout(Integer.parseInt(readTimeout));
+      }
+      if (!StringUtils.isNullOrEmpty(connectTimeout)) {
+        context.setConnectTimeout(Integer.parseInt(connectTimeout));
       }
 
     } catch (Exception e) {
@@ -926,9 +977,12 @@ public class ExecutionContext implements Cloneable {
   public static Map<String, String> commandBeforeHook = new HashMap<>();
 
   public boolean isLiteMode() {
-    return liteMode;
+    return liteMode != null && liteMode;
   }
 
+  public Boolean getLiteMode() {
+    return liteMode;
+  }
   public void setLiteMode(boolean liteMode) {
     this.liteMode = liteMode;
   }
@@ -995,5 +1049,17 @@ public class ExecutionContext implements Cloneable {
 
   public void setUseProjectWithSettings(boolean useProjectWithSettings) {
     this.useProjectWithSettings = useProjectWithSettings;
+  }
+  public void setReadTimeout(int readTimeout) {
+    this.readTimeout = readTimeout;
+  }
+  public int getReadTimeout() {
+    return readTimeout;
+  }
+  public void setConnectTimeout(int connectTimeout) {
+    this.connectTimeout = connectTimeout;
+  }
+  public int getConnectTimeout() {
+    return connectTimeout;
   }
 }
