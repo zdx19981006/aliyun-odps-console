@@ -22,6 +22,7 @@ package com.aliyun.openservices.odps.console;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
@@ -35,21 +36,16 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import com.aliyun.odps.*;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import com.aliyun.odps.Instance;
 import com.aliyun.odps.Instance.TaskSummary;
-import com.aliyun.odps.InstanceFilter;
-import com.aliyun.odps.Instances;
-import com.aliyun.odps.Job;
-import com.aliyun.odps.Odps;
-import com.aliyun.odps.OdpsException;
-import com.aliyun.odps.ReloadException;
 import com.aliyun.odps.task.SQLTask;
+import com.aliyun.openservices.odps.console.output.DefaultOutputWriter;
 import com.aliyun.openservices.odps.console.output.InstanceRunner;
 import com.aliyun.openservices.odps.console.output.state.InstanceRunningTest;
 import com.aliyun.openservices.odps.console.output.state.InstanceSuccess;
@@ -86,16 +82,17 @@ public class InstanceRunnerTest {
     runner.submit();
     runner.waitForCompletion();
     Method method = InstanceSuccess.class.getDeclaredMethod("getTaskSummaryV1", Odps.class,
-                                                            Instance.class, String.class);
+                                                            Instance.class, String.class,
+                                                            DefaultOutputWriter.class);
     method.setAccessible(true);
     Instance instance = runner.getInstance();
     System.out.println(instance);
     assertNotNull(instance);
-    TaskSummary summary = (TaskSummary) method.invoke(new InstanceSuccess(), odps, instance, "sqltest");
+    TaskSummary summary = (TaskSummary) method.invoke(new InstanceSuccess(), odps, instance, "sqltest", null);
     String summaryText = summary.getSummaryText();
     System.out.println(summaryText);
     assertNotNull(summaryText);
-    assertTrue(summaryText.startsWith("resource cost"));
+    assertTrue(summaryText.contains("resource cost"));
   }
 
   @Test(expected = OdpsException.class)
@@ -118,7 +115,7 @@ public class InstanceRunnerTest {
       public Object answer(InvocationOnMock invocation) throws Throwable {
         createCount ++;
           throw new OdpsException("", new IOException());}
-    }).when(instances).create(any(Job.class));
+    }).when(instances).create(any(Job.class), anyBoolean());
 
     listCall = false;
     doAnswer(new Answer() {
@@ -161,6 +158,9 @@ public class InstanceRunnerTest {
     task.setName(taskname);
 
     Instance instance = Mockito.spy(instances.create(task));
+
+    LogView logView = new LogView(odps);
+    System.out.println(logView.generateLogView(instance, 24*7));
 
     doAnswer(new Answer() {
       @Override
@@ -229,6 +229,8 @@ public class InstanceRunnerTest {
     doReturn(warnings).when(instance).getTaskInfo(taskname, "warnings");
 
     InstanceRunner runner = Mockito.spy(new InstanceRunner(odps, instance, context));
+    // InstanceTerminated#setTaskResult need task finish
+    instance.waitForSuccess();
     runner.waitForCompletion();
     System.err.flush();
 
@@ -268,7 +270,7 @@ public class InstanceRunnerTest {
 
         return null;
       }
-    }).when(instances).create(any(Job.class));
+    }).when(instances).create(any(Job.class), anyBoolean());
 
     listCall = false;
     doAnswer(new Answer() {
@@ -310,7 +312,7 @@ public class InstanceRunnerTest {
         invocation.callRealMethod();
         throw new OdpsException("", new IOException());
       }
-    }).when(instances).create(any(Job.class));
+    }).when(instances).create(any(Job.class), anyBoolean());
 
     listCall = false;
     doAnswer(new Answer() {

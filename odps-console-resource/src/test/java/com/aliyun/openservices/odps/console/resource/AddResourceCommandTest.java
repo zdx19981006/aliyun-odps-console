@@ -215,7 +215,8 @@ public class AddResourceCommandTest {
   }
 
   @Test
-  public void testAddVolumeArchiveExecute() throws ODPSConsoleException, OdpsException, IOException {
+  public void testAddVolumeArchiveExecute()
+      throws ODPSConsoleException, OdpsException, IOException, InterruptedException {
     ExecutionContext context = ExecutionContext.init();
     String commandText = null;
     AbstractCommand command;
@@ -242,6 +243,8 @@ public class AddResourceCommandTest {
 
     commandText = String.format("add volumearchive /addvolumetest/addvolumetest/volumearchive.zip as volumearchive.zip");
 
+    // 新创建的 volume 可能暂时不可见
+    Thread.sleep(3000);
     // A warning will be output to console
     command = AddResourceCommand.parse(commandText, context);
     assertNotNull(command);

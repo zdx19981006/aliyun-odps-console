@@ -1,13 +1,26 @@
 package com.aliyun.openservices.odps.console.utils;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+import org.apache.commons.codec.digest.DigestUtils;
+
+import com.aliyun.odps.utils.StringUtils;
+import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
-import org.apache.commons.codec.digest.DigestUtils;
-
-import java.io.*;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 
 /**
  * Created by dongxiao on 2019/12/20.
@@ -53,6 +66,25 @@ public class LocalCacheUtils {
   public static void enableMultiAttachSessionMode(Long maxAttachCount) {
     multiAttachSessionMode = true;
     MAX_CACHE_COUNT = maxAttachCount.intValue();
+  }
+
+  public static String getSpecificCacheFile(ExecutionContext sessionContext, String category, String key)
+      throws IOException {
+    String configFile = sessionContext.getConfigFile();
+    String endpoint = sessionContext.getEndpoint();
+    String projectName = sessionContext.getProjectName();
+    String accessId = sessionContext.getAccessId();
+    String configKey = endpoint + "_" + projectName + "_" + accessId;
+    String sessionHash = DigestUtils.md5Hex(configKey).toUpperCase();
+    if (!StringUtils.isBlank(category)) {
+      Files.createDirectories(
+          Paths.get(new File(configFile).getAbsoluteFile().getParent() + "/." + category));
+      Files.createDirectories(
+          Paths.get(new File(configFile).getAbsoluteFile().getParent() + "/." + category + "/"
+                    + sessionHash));
+    }
+    return new File(configFile).getAbsoluteFile().getParent() + "/." + category + "/" + sessionHash
+           + "/" + key + ".cache";
   }
 
   public static void setCacheDir(String configFile, String endpoint, String projectName, String accessId) throws IOException {

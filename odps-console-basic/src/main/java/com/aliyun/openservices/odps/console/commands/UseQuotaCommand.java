@@ -1,5 +1,6 @@
 package com.aliyun.openservices.odps.console.commands;
 
+import java.io.IOException;
 import java.io.PrintStream;
 import java.security.InvalidParameterException;
 import java.util.List;
@@ -12,6 +13,8 @@ import com.aliyun.odps.Quota;
 import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
+import com.aliyun.openservices.odps.console.utils.FileStorage;
+import com.aliyun.openservices.odps.console.utils.LocalCacheUtils;
 import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
 import com.aliyun.openservices.odps.console.utils.SessionUtils;
 
@@ -21,9 +24,9 @@ public class UseQuotaCommand extends AbstractCommand {
   private static final String OPTION_QUOTA_NAME = "--quota-name";
   private static final String OPTION_DEFAULT_QUOTA_FLAG = "default";
 
-  public static final String[] HELP_TAGS = new String[] {"use", "quota"};
+  public static final String[] HELP_TAGS = new String[]{"use", "quota"};
   private static final Pattern PATTERN = Pattern.compile(
-"USE\\s+QUOTA\\s+([\\u4E00-\\u9FA5A-Za-z0-9_\\-]+)(\\s+IN\\sREGION\\s(.+))?",
+      "USE\\s+QUOTA\\s+([\\u4E00-\\u9FA5A-Za-z0-9_\\-]+)(\\s+IN\\sREGION\\s(.+))?",
       Pattern.CASE_INSENSITIVE);
 
   public static void printUsage(PrintStream stream) {
@@ -68,36 +71,36 @@ public class UseQuotaCommand extends AbstractCommand {
       return;
     }
 
-    if (this.regionId == null || this.regionId.isEmpty()) {
-      this.regionId = getCurrentOdps().projects().get(getCurrentProject()).getDefaultQuotaRegion();
-    }
-
     // Make sure the quota exists
-    Quota quota = null;
     try {
-      quota = getCurrentOdps().quotas().get(regionId, quotaName);
-      quota.reload();
-      if (quota.isParentQuota()) {
-        throw new InvalidParameterException("Level 1 quota is not allowed to use. Please use a Level 2 quota.");
-      }
-      if (quota.getResourceSystemType() != null
-          && "FUXI_ONLINE".equalsIgnoreCase(quota.getResourceSystemType())) {
-        throw new InvalidParameterException("Online quota is not allowed to use manually. " +
-                "It can only be used automatically by entering interactive mode.");
+      QuotaCacheItem quota = load(quotaName);
+      if (quota == null) {
+        getContext().getOutputWriter()
+            .writeError("Cannot use quota " + quotaName);
+        return;
       }
 
+      if (quota.isParentQuota) {
+        throw new InvalidParameterException(
+            "Level 1 quota is not allowed to use. Please use a Level 2 quota.");
+      }
+      if ("FUXI_ONLINE".equalsIgnoreCase(quota.quotaType)) {
+        throw new InvalidParameterException("Online quota is not allowed to use manually. " +
+                                            "It can only be used automatically by entering interactive mode.");
+      }
       // fuxi_vw means enable query by mcqa v2
-      if (quota.getResourceSystemType() != null
-          && "FUXI_VW".equalsIgnoreCase(quota.getResourceSystemType())) {
+      if ("FUXI_VW".equalsIgnoreCase(quota.quotaType)) {
         getContext().setInteractiveQuery(true);
         getContext().setMcqaV2(true);
         SessionUtils.resetSQLExecutor(null, null, getContext(), getCurrentOdps(), false,
-                                      quota.getNickname(), true, regionId);
+                                      quota.quotaName, true, quota.mcqaV2Header, regionId);
       } else {
         // mcqa v2 no need to set hints
-        String value = String.format("%s@%s", quota.getNickname(), quota.getRegionId());
+        String value = String.format("%s@%s", quota.quotaName, quota.regionId);
         SetCommand.setMap.put("odps.task.wlm.quota", value);
       }
+      getContext().setQuotaName(quota.quotaName);
+      getContext().setQuotaRegionId(quota.regionId);
       if (StringUtils.isNullOrEmpty(regionId)) {
         getContext().getOutputWriter()
             .writeError("Use quota " + quotaName + " successfully.");
@@ -107,7 +110,7 @@ public class UseQuotaCommand extends AbstractCommand {
       }
     } catch (NoSuchObjectException e) {
       String errMsg = "Quota " + quotaName + " is not found in region " + regionId
-              + ". It may be in another region or not exist at all.";
+                      + ". It may be in another region or not exist at all.";
       NoSuchObjectException ee = new NoSuchObjectException(errMsg, e);
       ee.setStatus(e.getStatus());
       ee.setRequestId(e.getRequestId());
@@ -118,9 +121,10 @@ public class UseQuotaCommand extends AbstractCommand {
       ee.setStatus(e.getStatus());
       ee.setRequestId(e.getRequestId());
       throw ee;
+    } catch (IOException e) {
+      String errMsg = "Read quota " + quotaName + " in region " + regionId + " from cache failed, because ";
+      throw new ODPSConsoleException(errMsg + e.getMessage(), e);
     }
-    getContext().setQuotaName(quota.getNickname());
-    getContext().setQuotaRegionId(quota.getRegionId());
   }
 
   public static UseQuotaCommand parse(List<String> optionList, ExecutionContext sessionContext)
@@ -144,5 +148,58 @@ public class UseQuotaCommand extends AbstractCommand {
           matcher.group(1));
     }
     return null;
+  }
+
+  // 在文件中缓存 quota 相关信息，缓存地址为
+  // configDir/.quotas/hex(endpoint_projectName_accessId)/quotaName.cache
+  static class QuotaCacheItem {
+    String regionId;
+    String quotaName;
+    String quotaType;
+    String mcqaV2Header;
+    boolean isParentQuota;
+  }
+
+  private static String quotaCacheCategory = "quotas";
+
+  private QuotaCacheItem load(String quotaName)
+      throws OdpsException, ODPSConsoleException, IOException {
+    if (StringUtils.isNullOrEmpty(quotaName)) {
+      return null;
+    }
+    QuotaCacheItem quotaCacheItem = null;
+    if (getContext().isEnableQuotaCache()) {
+      String cacheFile =
+          LocalCacheUtils.getSpecificCacheFile(getContext(), quotaCacheCategory, quotaName);
+      FileStorage<QuotaCacheItem> cache = new FileStorage<>(cacheFile, QuotaCacheItem.class);
+      quotaCacheItem = cache.load();
+    }
+    if (quotaCacheItem == null || (this.regionId != null && !this.regionId.equals(
+        quotaCacheItem.regionId))) {
+      if (this.regionId == null || this.regionId.isEmpty()) {
+        this.regionId =
+            getCurrentOdps().projects().get(getCurrentProject()).getDefaultQuotaRegion();
+      }
+      Quota quota = getCurrentOdps().quotas().get(this.regionId, quotaName);
+      quota.reload();
+      quotaCacheItem = new QuotaCacheItem();
+      quotaCacheItem.quotaName = quotaName;
+      quotaCacheItem.regionId = quota.getRegionId();
+      quotaCacheItem.quotaType = quota.getResourceSystemType();
+      quotaCacheItem.mcqaV2Header = quota.getMcqaConnHeader();
+      quotaCacheItem.isParentQuota = quota.isParentQuota();
+      save(quotaCacheItem);
+    }
+    return quotaCacheItem;
+  }
+
+  private void save(QuotaCacheItem quotaCacheItem) throws IOException {
+    if (getContext().isEnableQuotaCache()) {
+      String cacheFile =
+          LocalCacheUtils.getSpecificCacheFile(getContext(), quotaCacheCategory,
+                                               quotaCacheItem.quotaName);
+      FileStorage<QuotaCacheItem> cache = new FileStorage<>(cacheFile, QuotaCacheItem.class);
+      cache.save(quotaCacheItem);
+    }
   }
 }

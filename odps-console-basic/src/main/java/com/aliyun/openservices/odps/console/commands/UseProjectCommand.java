@@ -34,6 +34,7 @@ import javax.net.ssl.SSLHandshakeException;
 import com.aliyun.odps.Odps;
 import com.aliyun.odps.OdpsException;
 import com.aliyun.odps.Project;
+import com.aliyun.odps.sqa.v2.SQLExecutorImpl;
 import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
@@ -130,9 +131,11 @@ public class UseProjectCommand extends DirectCommand {
       // Timezone
       getContext().setSqlTimezone(TimeZone.getDefault().getID());
     }
-    // Quota
-    getContext().setQuotaName(null);
-    getContext().setQuotaRegionId(null);
+    if (!getContext().isMcqaV2()) {
+      // Quota
+      getContext().setQuotaName(null);
+      getContext().setQuotaRegionId(null);
+    }
     // Interactive session
     if (getContext().isInteractiveQuery() && !getContext().isMcqaV2()) {
       getContext().getOutputWriter().writeError(
@@ -190,6 +193,10 @@ public class UseProjectCommand extends DirectCommand {
       // Priority
       getContext().setPriority(ExecutionContext.DEFAULT_PRIORITY);
       getContext().setPaiPriority(ExecutionContext.DEFAULT_PAI_PRIORITY);
+    }
+    if (getContext().isMcqaV2()) {
+      SQLExecutorImpl executor = (SQLExecutorImpl) ExecutionContext.getExecutor();
+      executor.setProject(projectName);
     }
   }
 

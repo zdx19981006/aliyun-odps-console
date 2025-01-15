@@ -19,8 +19,6 @@
 
 package com.aliyun.openservices.odps.console.commands;
 
-import static org.junit.Assert.assertEquals;
-
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
@@ -41,15 +39,23 @@ public class UseProjectCommandTest {
 
   @Test
   public void testRetainSettings() {
+    ExecutionContext executionContext = new ExecutionContext();
+
     UseProjectCommand
         command =
-        UseProjectCommand.parse("use " + "testProject" + "   with-settings  ", null);
+        UseProjectCommand.parse("use " + "testProject" + "   with-settings  ",
+                                executionContext);
     Assert.assertNotNull(command);
     Assert.assertTrue(command.isWithSettings());
 
-    command = UseProjectCommand.parse("use " + " testProject ", new ExecutionContext());
+    command = UseProjectCommand.parse("use " + " testProject ", executionContext);
     Assert.assertNotNull(command);
     Assert.assertFalse(command.isWithSettings());
+
+    executionContext.setUseProjectWithSettings(true);
+    command = UseProjectCommand.parse("use " + " testProject ", executionContext);
+    Assert.assertNotNull(command);
+    Assert.assertTrue(command.isWithSettings());
   }
 
 }
