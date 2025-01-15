@@ -1,8 +1,11 @@
 package com.aliyun.openservices.odps.console.utils;
 
+import java.util.Map;
+
 import com.aliyun.odps.Instance;
 import com.aliyun.odps.Odps;
 import com.aliyun.odps.OdpsException;
+import com.aliyun.odps.Quota;
 import com.aliyun.odps.sqa.SQLExecutor;
 import com.aliyun.odps.sqa.SQLExecutorBuilder;
 import com.aliyun.odps.utils.StringUtils;
@@ -10,8 +13,6 @@ import com.aliyun.openservices.odps.console.ExecutionContext;
 import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import com.aliyun.openservices.odps.console.commands.SetCommand;
 import com.aliyun.openservices.odps.console.constants.ODPSConsoleConstants;
-
-import java.util.Map;
 
 /**
  * Created by dongxiao on 2019/12/23.
@@ -55,10 +56,13 @@ public class SessionUtils {
   }
 
   public static String resetSQLExecutor(String sessionName, Instance instance, ExecutionContext context, Odps odps, boolean autoReattach, String quotaName) throws OdpsException {
-    return resetSQLExecutor(sessionName, instance, context, odps, autoReattach, quotaName, false, null);
+    return resetSQLExecutor(sessionName, instance, context, odps, autoReattach, quotaName, false, null, null);
   }
 
-  public static String resetSQLExecutor(String sessionName, Instance instance, ExecutionContext context, Odps odps, boolean autoReattach, String quotaName, boolean mcqaV2, String regionId) throws OdpsException {
+  public static String resetSQLExecutor(String sessionName, Instance instance,
+                                        ExecutionContext context, Odps odps, boolean autoReattach,
+                                        String quotaName, boolean mcqaV2, String mcqaV2ConnHeader,
+                                        String regionId) throws OdpsException {
     SQLExecutorBuilder builder = new SQLExecutorBuilder();
     builder.odps(odps)
         .quotaName(quotaName)
@@ -74,6 +78,11 @@ public class SessionUtils {
         .recoverFrom(instance)
         .enableMcqaV2(mcqaV2)
         .regionId(regionId);
+    if (!StringUtils.isNullOrEmpty(mcqaV2ConnHeader)) {
+      Quota quota = odps.quotas().get(regionId, quotaName);
+      quota.setMcqaConnHeader(mcqaV2ConnHeader);
+      builder.quota(quota);
+    }
     SQLExecutor executor = builder.build();
     String currentId = mcqaV2 ? null : executor.getInstance().getId();
     resetSessionContext(executor, odps, context);

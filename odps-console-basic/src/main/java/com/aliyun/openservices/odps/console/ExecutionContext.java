@@ -19,6 +19,17 @@
 
 package com.aliyun.openservices.odps.console;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.URLDecoder;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TimeZone;
+
+import org.apache.commons.lang.BooleanUtils;
+
 import com.aliyun.odps.account.Account.AccountProvider;
 import com.aliyun.odps.sqa.FallbackPolicy;
 import com.aliyun.odps.sqa.SQLExecutor;
@@ -32,16 +43,6 @@ import com.aliyun.openservices.odps.console.utils.LocalCacheUtils;
 import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import org.apache.commons.lang.BooleanUtils;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.net.URLDecoder;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TimeZone;
 
 public class ExecutionContext implements Cloneable {
 
@@ -209,6 +210,12 @@ public class ExecutionContext implements Cloneable {
    * when this flag is true, [use project xxx] command with default trigger [use project xxx --with-settings]
    */
   private boolean useProjectWithSettings = false;
+
+  /**
+   * when this flag is true, quota info will cache in local fs
+   */
+  private boolean enableQuotaCache = false;
+
   private int readTimeout;
   private int connectTimeout;
 
@@ -618,6 +625,7 @@ public class ExecutionContext implements Cloneable {
       String keepSessionVariables = properties.getProperty(ODPSConsoleConstants.KEEP_SESSION_VARIABLES);
       String readTimeout = properties.getProperty(ODPSConsoleConstants.NETWORK_READ_TIMEOUT);
       String connectTimeout = properties.getProperty(ODPSConsoleConstants.NETWORK_CONNECT_TIMEOUT);
+      String enableQuotaCache = properties.getProperty(ODPSConsoleConstants.ENABLE_QUOTA_CACHE);
 
       context.setOdpsCupidProxyEndpoint(odpsCupidProxyEndpoint);
 
@@ -791,6 +799,9 @@ public class ExecutionContext implements Cloneable {
 
       if (!StringUtils.isNullOrEmpty(keepSessionVariables)) {
         context.setUseProjectWithSettings(BooleanUtils.toBoolean(keepSessionVariables));
+      }
+      if (!StringUtils.isNullOrEmpty(enableQuotaCache)) {
+        context.setEnableQuotaCache(BooleanUtils.toBoolean(enableQuotaCache));
       }
       if (!StringUtils.isNullOrEmpty(readTimeout)) {
         context.setReadTimeout(Integer.parseInt(readTimeout));
@@ -1050,6 +1061,15 @@ public class ExecutionContext implements Cloneable {
   public void setUseProjectWithSettings(boolean useProjectWithSettings) {
     this.useProjectWithSettings = useProjectWithSettings;
   }
+
+  public void setEnableQuotaCache(boolean enableQuotaCache) {
+    this.enableQuotaCache = enableQuotaCache;
+  }
+
+  public boolean isEnableQuotaCache() {
+    return enableQuotaCache;
+  }
+
   public void setReadTimeout(int readTimeout) {
     this.readTimeout = readTimeout;
   }

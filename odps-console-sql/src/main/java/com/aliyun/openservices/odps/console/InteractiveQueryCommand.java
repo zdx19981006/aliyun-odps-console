@@ -27,16 +27,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import com.google.gson.*;
-import com.aliyun.odps.data.ResultSet;
-import com.aliyun.odps.sqa.SQLExecutor;
 import org.jline.reader.UserInterruptException;
 
 import com.aliyun.odps.Instance;
@@ -46,6 +42,9 @@ import com.aliyun.odps.OdpsException;
 import com.aliyun.odps.Session;
 import com.aliyun.odps.Sessions;
 import com.aliyun.odps.data.Record;
+import com.aliyun.odps.data.ResultSet;
+import com.aliyun.odps.sqa.SQLExecutor;
+import com.aliyun.odps.sqa.v2.InfoResultSet;
 import com.aliyun.odps.utils.StringUtils;
 import com.aliyun.openservices.odps.console.commands.MultiClusterCommandBase;
 import com.aliyun.openservices.odps.console.commands.SetCommand;
@@ -56,6 +55,7 @@ import com.aliyun.openservices.odps.console.utils.ODPSConsoleUtils;
 import com.aliyun.openservices.odps.console.utils.OdpsConnectionFactory;
 import com.aliyun.openservices.odps.console.utils.SessionUtils;
 import com.aliyun.openservices.odps.console.utils.SignalUtil;
+import com.google.gson.Gson;
 
 import sun.misc.SignalHandler;
 
@@ -265,6 +265,10 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
 
   private void printRecords(ResultSet resultSet)
       throws IOException, ODPSConsoleException {
+    if (resultSet instanceof InfoResultSet) {
+      getContext().getOutputWriter().writeResult(((InfoResultSet) resultSet).getInfo());
+      return;
+    }
     RecordPrinter recordPrinter = RecordPrinter.createReporter(resultSet.getTableSchema(), getContext());
     // header
     recordPrinter.printFrame();
@@ -329,12 +333,10 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
         getWriter().writeResult("Summary:\n" + respo.result);
       }
 
-      if (resultSet.getTableSchema() != null && resultSet.getTableSchema().getColumns().size() != 0) {
+      if (resultSet.getTableSchema() != null && !resultSet.getTableSchema().getColumns().isEmpty()) {
         printRecords(resultSet);
-      } else {
-        // non-select query
       }
-      getWriter().writeDebug(postMessage);
+      getWriter().writeError(postMessage);
     } catch (OdpsException e) {
       waitLogviewGenerated();
       throw e;

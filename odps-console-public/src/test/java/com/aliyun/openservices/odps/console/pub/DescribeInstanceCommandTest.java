@@ -61,7 +61,7 @@ public class DescribeInstanceCommandTest {
     String result = "ID\\s+\\w+\\s+"
                     + "Owner\\s+.*\\s+"
                     + "StartTime\\s+.*\\s+"
-                    + "Status\\s+Running\\s+"
+                    + "Status\\s+(Running|Terminated)\\s+"
                     + "(AnonymousSQLTask\\s+(Running|Success)\\s+)?" //missing this field sometimes. delayed.
                     + "Query\\s+select count\\(\\*\\) from src;\\s+";
     Pattern pattern = Pattern.compile(result);

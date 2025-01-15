@@ -19,14 +19,13 @@
 
 package com.aliyun.openservices.odps.console.commands;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-
+import com.aliyun.openservices.odps.console.ExecutionContext;
+import com.aliyun.openservices.odps.console.ODPSConsoleException;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.aliyun.openservices.odps.console.ExecutionContext;
-import com.aliyun.openservices.odps.console.ODPSConsoleException;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Created by zhenhong.gzh on 16/3/17.
@@ -35,6 +34,8 @@ public class CompactCommandTest {
   private String [] positive = {"alter\t table \rtbl_name    compact major \n ", "alter\t\r\n table tbl_name  partition (dt='s') compact minor"};
 
   private String [] negative = {"alter\t table \rtbl_name    compact \n ", "alter table tbl_name  partition (dt='1') compact mi ", "alter table tbl_name  compact mn"};
+
+  private String [] withCompactId = {"alter\t table \rtbl_name    compact minor \n -h 1234 -f", "alter\t\r\n table tbl_name  partition (dt='s') compact minor -f 1234"};
 
   @Test
   public void test() throws Exception {
@@ -58,5 +59,16 @@ public class CompactCommandTest {
     }
 
     Assert.assertEquals(errorCount, negative.length);
+  }
+
+  @Test
+  public void testWithCompactId() throws Exception {
+    CompactCommand compactCommand = null;
+    ExecutionContext context = ExecutionContext.init();
+    for (String cmd : withCompactId) {
+      compactCommand = CompactCommand.parse(cmd, context);
+      assertNotNull(compactCommand);
+      assertTrue(compactCommand.getParams().containsKey("f"));
+    }
   }
 }
