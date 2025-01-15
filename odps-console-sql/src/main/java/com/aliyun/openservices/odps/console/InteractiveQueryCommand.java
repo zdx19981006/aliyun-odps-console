@@ -188,14 +188,16 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
               sqlExecutor.cancel();
               shouldCancel = false;
             }
-            try {
-              List<Instance.StageProgress> stages = sqlExecutor.getProgress();
-              context.setTaskProgress(stages);
-              if (!disableOutput.get()) {
-                reporter.printProgress(false);
+            if (!getContext().isSkipGetProgress()) {
+              try {
+                List<Instance.StageProgress> stages = sqlExecutor.getProgress();
+                context.setTaskProgress(stages);
+                if (!disableOutput.get()) {
+                  reporter.printProgress(false);
+                }
+              } catch (Exception ignored) {
+                // 如果拿进度出错，重复拿
               }
-            } catch (Exception ignored) {
-              // 如果拿进度出错，重复拿
             }
           } catch (Exception e) {
             context.getExecutionContext().getOutputWriter()
@@ -318,11 +320,11 @@ public class InteractiveQueryCommand extends MultiClusterCommandBase {
       } else {
         resultSet = executor.getResultSet();
       }
+      String postMessage = "Query cost time: "
+                           + (System.currentTimeMillis() - startTime) + " ms.";
 
       waitLogviewGenerated();
       finishReporter(reporterThread);
-      String postMessage = "Query cost time: "
-                           + (System.currentTimeMillis() - startTime) + " ms.";
 
       // print summary in compatible output mode
       if (this.getContext().isInteractiveOutputCompatible()) {
