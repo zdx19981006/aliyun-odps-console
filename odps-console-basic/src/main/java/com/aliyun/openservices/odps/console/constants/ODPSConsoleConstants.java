@@ -102,6 +102,7 @@ public class ODPSConsoleConstants {
   public static final String INSTANCE_TUNNEL_MAX_RECORD = "instance_tunnel_max_record";
   public static final String INSTANCE_TUNNEL_MAX_SIZE = "instance_tunnel_max_size";
   public static final String ENABLE_QUOTA_CACHE = "enable_quota_cache";
+  public static final String SKIP_PROGRESS = "skip_progress";
 
   // Session flags
   public static final String INTERACTIVE_AUTO_RERUN = "interactive_auto_rerun";

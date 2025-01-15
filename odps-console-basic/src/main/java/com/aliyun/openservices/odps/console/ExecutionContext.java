@@ -216,6 +216,11 @@ public class ExecutionContext implements Cloneable {
    */
   private boolean enableQuotaCache = false;
 
+  /**
+   * when this flag is true, skip get progress (only mcqa 2.0)
+   */
+  private boolean skipGetProgress = false;
+
   private int readTimeout;
   private int connectTimeout;
 
@@ -626,6 +631,7 @@ public class ExecutionContext implements Cloneable {
       String readTimeout = properties.getProperty(ODPSConsoleConstants.NETWORK_READ_TIMEOUT);
       String connectTimeout = properties.getProperty(ODPSConsoleConstants.NETWORK_CONNECT_TIMEOUT);
       String enableQuotaCache = properties.getProperty(ODPSConsoleConstants.ENABLE_QUOTA_CACHE);
+      String skipProgress = properties.getProperty(ODPSConsoleConstants.SKIP_PROGRESS);
 
       context.setOdpsCupidProxyEndpoint(odpsCupidProxyEndpoint);
 
@@ -802,6 +808,9 @@ public class ExecutionContext implements Cloneable {
       }
       if (!StringUtils.isNullOrEmpty(enableQuotaCache)) {
         context.setEnableQuotaCache(BooleanUtils.toBoolean(enableQuotaCache));
+      }
+      if (!StringUtils.isNullOrEmpty(skipProgress)) {
+        context.setSkipGetProgress(BooleanUtils.toBoolean(skipProgress));
       }
       if (!StringUtils.isNullOrEmpty(readTimeout)) {
         context.setReadTimeout(Integer.parseInt(readTimeout));
@@ -1068,6 +1077,14 @@ public class ExecutionContext implements Cloneable {
 
   public boolean isEnableQuotaCache() {
     return enableQuotaCache;
+  }
+
+  public void setSkipGetProgress(boolean skipGetProgress) {
+    this.skipGetProgress = skipGetProgress;
+  }
+
+  public boolean isSkipGetProgress() {
+    return skipGetProgress;
   }
 
   public void setReadTimeout(int readTimeout) {
